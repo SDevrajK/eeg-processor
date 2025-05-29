@@ -1,0 +1,43 @@
+
+# Paths (relative to tests)
+paths:
+  raw_data: "../test_data/curry/"  # Single test file
+  results_dir: "../test_results/curry/"
+  participants: ["S_002_F.dat", "S_003_dat"]  # Optional - when omitted, loads all *.vhdr files
+
+
+# Conditions
+conditions:
+  - name: "Baseline"           # Condition name
+    condition_markers: [41, 49]  # Tuple: [start, end] event codes (optional)
+  - name: "Hearing Level"
+    epoch_events: {"Onset": 11,  "Offset": 12}       # Trigger codes marking this condition
+    condition_markers: [10, 19]  # Tuple: [start, end] event codes (optional)
+  - name: "Masking Level"
+    epoch_events: {"Onset": 21,  "Offset": 22}       # Trigger codes marking this condition
+    condition_markers: [20, 29]  # Tuple: [start, end] event codes (optional)
+  - name: "Inhibition Level"
+    epoch_events: {"Onset": 31,  "Offset": 32}       # Trigger codes marking this condition
+    condition_markers: [30, 39]  # Tuple: [start, end] event codes (optional)
+
+# Minimal processing stages
+stages:
+  - segment_condition:
+  - adjust_events:
+      shift_ms: 400
+  - compute_eog:
+      heog_pair: [ 'FT10', 'FT9' ]
+      veog_pair: [ 'Fp2', 'EOG']
+  - filter:
+      l_freq: 1
+  - blink_artifact:
+      method: ica
+      plot_components: False
+  - filter:
+      h_freq: 20
+  - epoch:
+      tmin: -0.2
+      tmax: .6
+      baseline: [-0.1, 0]
+      reject:
+        eeg: 250e-6
