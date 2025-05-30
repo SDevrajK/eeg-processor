@@ -3,6 +3,11 @@ from mne.io import BaseRaw
 from .brainvision import BrainVisionLoader
 from .curry import CurryLoader
 from .neuroscan import NeuroscanLoader
+from .fif import FifLoader
+from .bdf import BDFLoader
+from .eeglab import EEGLABLoader
+from .edf import EDFLoader
+from .ant import ANTLoader
 from collections import defaultdict
 import time
 #from ..utils.montages import add_standard_montage
@@ -26,7 +31,19 @@ def load_raw(file_path: str | Path, **kwargs) -> BaseRaw:
     path = Path(file_path).expanduser().resolve()
     _last_loaded_file = str(path)
 
-    for loader in [BrainVisionLoader, CurryLoader, NeuroscanLoader]:
+    # Order matters - more specific loaders first
+    loaders = [
+        BrainVisionLoader,  # .vhdr
+        FifLoader,          # .fif, .fiff
+        BDFLoader,          # .bdf (Biosemi)
+        EEGLABLoader,       # .set (EEGLAB)
+        EDFLoader,          # .edf (European Data Format)
+        ANTLoader,          # .cnt (ANT Neuro - check first for .cnt)
+        NeuroscanLoader,    # .cnt (Neuroscan - fallback for .cnt)
+        CurryLoader,        # .dap, .dat, .ceo
+    ]
+
+    for loader in loaders:
         if loader.supports_format(path):
             _format_counts[loader.__name__] += 1
             return loader.load(path, **kwargs)
@@ -35,6 +52,11 @@ def load_raw(file_path: str | Path, **kwargs) -> BaseRaw:
     raise ValueError(f"Unsupported format: {path.suffix}",
                     f"Supported formats:\n"
                     f"- BrainVision: .vhdr (requires .eeg/.vmrk)\n"
-                    f"- Curry 7: .dap, .dat, or .ceo\n"
-                    f"- Neuroscan: .cnt"
+                    f"- FIFF: .fif, .fiff\n"
+                    f"- Biosemi: .bdf\n"
+                    f"- EEGLAB: .set (with .fdt)\n"
+                    f"- EDF/EDF+: .edf\n"
+                    f"- ANT Neuro: .cnt\n"
+                    f"- Neuroscan: .cnt\n"
+                    f"- Curry: .dap, .dat, .ceo"
                 )

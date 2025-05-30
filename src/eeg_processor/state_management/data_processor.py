@@ -60,7 +60,7 @@ class DataProcessor:
 
     def _crop(self, data: BaseRaw, inplace: bool = False, **kwargs) -> BaseRaw:
         """Cropping with inplace parameter passed to external function"""
-        from utils.raw_data_tools import crop_data
+        from ..utils.raw_data_tools import crop_data
         return crop_data(data, inplace=inplace, **kwargs)
 
     def _adjust_event_times(self, data: BaseRaw,
@@ -70,7 +70,7 @@ class DataProcessor:
                             inplace: bool = False,
                             **kwargs) -> BaseRaw:
         """Event time adjustment with inplace parameter passed to external function"""
-        from utils.raw_data_tools import adjust_event_times
+        from ..utils.raw_data_tools import adjust_event_times
         return adjust_event_times(raw=data, shift_ms=shift_ms, target_events=target_events, protect_events=protect_events, inplace=inplace, **kwargs)
 
     ## --- Preprocessing --- ##
@@ -80,7 +80,7 @@ class DataProcessor:
                       h_freq: Optional[float] = None,
                       inplace: bool = False, **kwargs) -> Union[BaseRaw, Epochs]:
         """Filtering with inplace parameter passed to external function"""
-        from processing.filtering import filter_data
+        from ..processing.filtering import filter_data
         return filter_data(data, l_freq=l_freq, h_freq=h_freq, inplace=inplace, **kwargs)
 
     def _compute_eog(self, data: BaseRaw,
@@ -89,7 +89,7 @@ class DataProcessor:
                      inplace: bool = False,
                      **kwargs) -> BaseRaw:
         """EOG computation with inplace parameter"""
-        from processing.montages import compute_eog_channels
+        from ..processing.montages import compute_eog_channels
         return compute_eog_channels(raw=data, heog_pair=heog_pair, veog_pair=veog_pair, inplace=inplace, **kwargs)
 
     def _detect_bad_channels(self, data: BaseRaw,
@@ -97,7 +97,7 @@ class DataProcessor:
                              inplace: bool = False,
                              **kwargs) -> BaseRaw:
         """Bad channel detection with inplace parameter"""
-        from processing.artifact import detect_bad_channels
+        from ..processing.bad_channels import detect_bad_channels
         return detect_bad_channels(data, segment_wise=segment_wise, inplace=inplace, **kwargs)
 
     def _rereference(self, data: BaseRaw,
@@ -106,7 +106,7 @@ class DataProcessor:
                      inplace: bool = False,
                      **kwargs) -> BaseRaw:
         """Rereferencing with inplace parameter"""
-        from processing.rereferencing import set_reference
+        from ..processing.rereferencing import set_reference
         return set_reference(data, method=method, exclude=exclude or [], inplace=inplace, **kwargs)
 
     def _remove_artifacts(self, data: BaseRaw,
@@ -115,10 +115,12 @@ class DataProcessor:
                           **kwargs) -> BaseRaw:
         """Artifact removal with inplace parameter passed to external function"""
         if method == "ica":
-            from processing.artifact import remove_blinks_with_ica
-            return remove_blinks_with_ica(raw=data, inplace=inplace, **kwargs)
+            from ..processing.ica import remove_artifacts_ica
+
+            return remove_artifacts_ica(raw=data, inplace=inplace, **kwargs)
         elif method == "regression":
-            # Temporarily disabled - needs fixing
+            # Keep for backward compatibility but recommend ICA
+            logger.warning("Regression method is deprecated. Consider using ICA method instead.")
             raise NotImplementedError("Regression method currently unavailable")
         else:
             raise ValueError(f"Unknown artifact removal method: {method}")
@@ -133,7 +135,7 @@ class DataProcessor:
         if not self.current_condition:
             raise ValueError("Condition must be set for segmentation")
 
-        from utils.raw_data_tools import segment_by_condition_markers
+        from ..utils.raw_data_tools import segment_by_condition_markers
         return segment_by_condition_markers(
             raw=data,
             condition=self.current_condition,
@@ -153,7 +155,7 @@ class DataProcessor:
         if not self.current_condition:
             raise ValueError("Condition must be set before epoching")
 
-        from processing.epoching import create_epochs
+        from ..processing.epoching import create_epochs
         return create_epochs(
             raw=data,
             condition=self.current_condition,
@@ -194,7 +196,7 @@ class DataProcessor:
         if inplace:
             logger.info("inplace=True ignored for time-frequency analysis - always creates new AverageTFR object")
 
-        from processing.time_frequency import compute_tfr_average
+        from ..processing.time_frequency import compute_tfr_average
         return compute_tfr_average(
             epochs=data,
             freq_range=freq_range,
@@ -226,11 +228,8 @@ class DataProcessor:
         Returns:
             Spectrum object for baseline or RawTFR object for continuous analysis
         """
-        if inplace:
-            logger.warning("inplace=True ignored for raw time-frequency analysis")
-
         if output_type == "spectrum":
-            from processing.time_frequency import compute_baseline_spectrum
+            from ..processing.time_frequency import compute_baseline_spectrum
             return compute_baseline_spectrum(
                 raw=data,
                 freq_range=freq_range,
@@ -238,9 +237,10 @@ class DataProcessor:
                 method=method,
                 **kwargs
             )
+
         elif output_type == "raw_tfr":
             # Future implementation for continuous time-frequency
-            from processing.time_frequency import compute_raw_tfr
+            from ..processing.time_frequency import compute_raw_tfr
             return compute_raw_tfr(
                 raw=data,
                 freq_range=freq_range,
@@ -255,6 +255,6 @@ class DataProcessor:
                    data: Union[BaseRaw, Epochs, Evoked],
                    **kwargs) -> Union[BaseRaw, Epochs, Evoked]:
         """Visualization that preserves data"""
-        from processing.visualization import plot_stage
+        from ..processing.visualization import plot_stage
         plot_stage(data, **kwargs)
         return data  # Return unchanged for chaining

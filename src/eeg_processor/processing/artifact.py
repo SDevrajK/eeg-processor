@@ -142,12 +142,12 @@ def detect_bad_channels(
 
     # Final reporting
     final_bads = set(raw_processed.info['bads'])
-    new_bads = final_bads - original_bads
+    new_bads = set(detected_bads) - set(original_bads)
 
-    if new_bads:
-        logger.info(f"Summary - New bad channels: {new_bads}")
+    if final_bads:
+        logger.info(f"Summary - Final bad channels: {final_bads}")
     else:
-        logger.info("Summary - No additional bad channels found")
+        logger.info("Summary - No bad channels found")
 
     # Store metrics for quality tracking (accessible via the function's result)
     raw_processed._bad_channel_metrics = {
@@ -516,9 +516,6 @@ def remove_blinks_with_ica(raw: BaseRaw,
             # Store classification results
             ica.labels_ = ic_labels
 
-        except ImportError:
-            logger.error("mne-icalabel not installed. Install with: pip install mne-icalabel")
-            auto_classify = False
         except Exception as e:
             logger.error(f"ICALabel classification failed: {str(e)}")
             auto_classify = False

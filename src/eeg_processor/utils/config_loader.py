@@ -19,7 +19,7 @@ class PipelineConfig:
 def load_config(config_path: str) -> PipelineConfig:
     """Load and validate YAML config file."""
     config_path = Path(config_path).resolve()
-    with open(config_path, 'r') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         raw_config = yaml.safe_load(f)
 
     return validate_config(raw_config, config_path.parent)

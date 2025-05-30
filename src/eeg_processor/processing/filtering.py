@@ -1,13 +1,9 @@
 # Standard library
 from pathlib import Path
-import logging
+from loguru import logger
 from typing import Dict, List, Optional, Union
 import yaml
 
-import os
-import numpy as np
-import mne
-mne.viz.set_browser_backend('qt', verbose=True)  # Force Qt6 backend
 from mne.io import BaseRaw
 import matplotlib.pyplot as plt
 
@@ -19,12 +15,18 @@ def filter_data(raw: BaseRaw,
                 **filter_kwargs) -> BaseRaw:
     """Apply filtering with optional in-place operation"""
 
-    if inplace:
-        # Modify the input object directly
-        current_data = raw
+
+    if hasattr(raw, 'preload') and not raw.preload:
+        logger.info("Data not preloaded - loading into memory for filtering...")
+        if inplace:
+            current_data = raw.load_data()
+        else:
+            current_data = raw.copy().load_data()
     else:
-        # Create copy
-        current_data = raw.copy()
+        if inplace:
+            current_data = raw
+        else:
+            current_data = raw.copy()
 
     # Apply bandpass filter
     if l_freq is not None or h_freq is not None:

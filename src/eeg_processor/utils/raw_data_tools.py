@@ -6,7 +6,7 @@ import yaml
 
 import numpy as np
 from mne.io import BaseRaw
-from utils.event_parsers import find_matching_events
+from .event_parsers import find_matching_events
 
 
 def _replace_raw_content(original_raw: BaseRaw, new_raw: BaseRaw) -> BaseRaw:

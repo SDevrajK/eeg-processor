@@ -8,12 +8,12 @@ from mne import Epochs, Evoked
 from mne.time_frequency import AverageTFR, Spectrum, RawTFR
 
 # helper imports
-from utils.config_loader import load_config
-from utils.quality_tracker import QualityTracker, extract_bad_channel_metrics, extract_epoch_metrics
-from state_management.data_processor import DataProcessor
-from state_management.participant_handler import ParticipantHandler
-from state_management.result_saver import ResultSaver
-from file_io import load_raw
+from .utils.config_loader import load_config
+from .utils.quality_tracker import QualityTracker, extract_bad_channel_metrics, extract_epoch_metrics, extract_ica_metrics
+from .state_management.data_processor import DataProcessor
+from .state_management.participant_handler import ParticipantHandler
+from .state_management.result_saver import ResultSaver
+from .file_io import load_raw
 
 
 class EEGPipeline:
@@ -43,7 +43,7 @@ class EEGPipeline:
         return self
 
     def get_analysis_interface(self):
-        from utils.analysis_interface import AnalysisInterface
+        from .utils.analysis_interface import AnalysisInterface
         """Return minimal interface for loading processed data"""
         if not self.config:
             raise ValueError("Configuration not loaded. Call load_config() first.")
@@ -93,7 +93,7 @@ class EEGPipeline:
 
         for participant in self.participant_handler.participants:
             try:
-                logger.info(f"Processing participant: {participant.id}")
+                logger.debug(f"Processing participant: {participant.id}")
                 self.quality_tracker.track_participant_start(participant.id)
 
                 self._process_participant(participant)
@@ -181,24 +181,18 @@ class EEGPipeline:
 
     def _track_stage_quality(self, input_data, output_data, stage_name: str,
                              participant_id: str, condition: dict):
-        """Track quality metrics for specific stages"""
+        """Minimal quality tracking - delegates to QualityTracker"""
 
-        if stage_name == "detect_bad_channels":
-            metrics = extract_bad_channel_metrics(output_data)
-            self.quality_tracker.track_stage(participant_id, condition['name'],
-                                             stage_name, metrics)
-
-        elif stage_name == "epoch":
-            metrics = extract_epoch_metrics(output_data)
-            self.quality_tracker.track_stage(participant_id, condition['name'],
-                                             stage_name, metrics)
-
-        elif stage_name == "blink_artifact":
-            # Note: You'll need to modify your ICA functions to return component info
-            # For now, just track that ICA was applied
-            metrics = {'ica_applied': True}
-            self.quality_tracker.track_stage(participant_id, condition['name'],
-                                             stage_name, metrics)
+        if self.quality_tracker:
+            self.quality_tracker.track_stage_data(
+                input_data=input_data,
+                output_data=output_data,
+                stage_name=stage_name,
+                participant_id=participant_id,
+                condition_name=condition['name']
+            )
+        else:
+            logger.warning("Quality tracker not initialized - skipping quality tracking")
 
     def _parse_stage_config(self, stage_config: Union[str, Dict]) -> tuple:
         """Extract stage name and parameters from config"""
@@ -264,7 +258,7 @@ class EEGPipeline:
             return None
 
         try:
-            from utils.quality_reporter import generate_quality_reports
+            from .utils.quality_reporter import generate_quality_reports
 
             # Generate reports from the saved metrics
             summary_path, participant_paths = generate_quality_reports(self.config.results_dir)

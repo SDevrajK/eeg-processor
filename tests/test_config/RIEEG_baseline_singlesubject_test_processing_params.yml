@@ -26,11 +26,9 @@ stages:
   - blink_artifact:
       method: ica
       auto_classify: true
-      eog_ch: ['VEOG', 'HEOG']
-      ech_ch: None
-      require_agreement: True
-      agreement_method: 'liberal'
-      plot_components: True
+      eog_channels: ['VEOG', 'HEOG']
+      ecg_channels: None
+      plot_components: False
       enable_manual: False
   - time_frequency_raw:
       output_type: "raw_tfr"
