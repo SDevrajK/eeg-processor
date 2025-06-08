@@ -2,7 +2,7 @@ from pathlib import Path
 from mne.io import read_raw_fif, BaseRaw
 from .base import FileLoader
 from loguru import logger
-
+import numpy as np
 
 class FifLoader(FileLoader):
     """Handler for FIFF (.fif) files"""
@@ -19,6 +19,14 @@ class FifLoader(FileLoader):
                                     message="This filename.*does not conform to MNE naming conventions.*")
 
             raw = read_raw_fif(file_path, **kwargs, verbose=False)
+
+        # Explicitly set channel types to exclude EOG from forward model
+        eog_channels = ['HEOG', 'VEOG', 'EOG', 'heog', 'veog', 'eog']
+        stim_channels = ['STIM', 'TRIGGER']
+
+        # Set channel types
+        raw.set_channel_types({ch: 'eog' for ch in eog_channels if ch in raw.ch_names})
+        raw.set_channel_types({ch: 'stim' for ch in stim_channels if ch in raw.ch_names})
 
         return raw
 

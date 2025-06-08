@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Union
 from dataclasses import dataclass
+from loguru import logger
 
 
 @dataclass
@@ -17,36 +18,77 @@ class ParticipantHandler:
         self.participants = self._load_participants()
         self.current = None
 
+        logger.info(f"Participant handler initialized with {len(self.participants)} participants")
+
+        # Log participant info for debugging
+        for participant in self.participants:
+            logger.debug(f"Participant {participant.id}: {participant.file_path}")
+
     def _load_participants(self) -> List[Participant]:
-        """Create participants with properly resolved paths"""
+        """Create participants with properly resolved paths - supports both dict and list formats"""
         participants = []
-        raw_data_path = Path(self.config.raw_data_path).resolve()
+        raw_data_path = Path(self.config.raw_data_dir).resolve()
 
-        for file_spec in self.config.participants:
-            # Convert to Path object if needed
-            file_path = Path(file_spec) if isinstance(file_spec, str) else file_spec
+        # Handle the config.participants which could be:
+        # 1. List[Path] (old format from config loader)
+        # 2. Dict[str, str] (new format: {participant_id: filename})
+        # 3. List[str] (legacy list format)
 
-            # Resolve relative to raw_data directory
-            if not file_path.is_absolute():
-                file_path = (raw_data_path / file_path).resolve()
+        participants_data = self.config.participants
 
-            # Case-insensitive file search
-            if not file_path.exists():
-                file_path = self._find_matching_file(raw_data_path, file_path.name)
-                if not file_path:
-                    raise FileNotFoundError(
-                        f"Participant file not found in {raw_data_path}. "
-                        f"Tried: {file_spec}"
+        if isinstance(participants_data, dict):
+            # New dictionary format: {participant_id: filename}
+            for participant_id, filename in participants_data.items():
+                file_path = self._resolve_participant_file(raw_data_path, filename)
+                participants.append(
+                    Participant(
+                        id=participant_id,
+                        file_path=file_path,
+                        conditions=[cond['name'] for cond in self.config.conditions]
                     )
-
-            participants.append(
-                Participant(
-                    id=file_path.stem,
-                    file_path=file_path,
-                    conditions=[cond['name'] for cond in self.config.conditions]
                 )
-            )
+
+        elif isinstance(participants_data, list):
+            # List format - could be Path objects or strings
+            for file_spec in participants_data:
+                if hasattr(file_spec, 'id') and hasattr(file_spec, 'file_path'):
+                    # Already Participant objects from updated config loader
+                    participants.append(file_spec)
+                else:
+                    # Legacy format: strings or Path objects
+                    file_path = self._resolve_participant_file(raw_data_path, file_spec)
+                    participant_id = file_path.stem  # Generate ID from filename
+                    participants.append(
+                        Participant(
+                            id=participant_id,
+                            file_path=file_path,
+                            conditions=[cond['name'] for cond in self.config.conditions]
+                        )
+                    )
+        else:
+            raise ValueError(f"Unsupported participants format: {type(participants_data)}")
+
         return participants
+
+    def _resolve_participant_file(self, raw_data_path: Path, file_spec: Union[str, Path]) -> Path:
+        """Resolve participant file path with case-insensitive search"""
+        # Convert to Path object if needed
+        file_path = Path(file_spec) if isinstance(file_spec, str) else file_spec
+
+        # Resolve relative to raw_data directory
+        if not file_path.is_absolute():
+            file_path = (raw_data_path / file_path).resolve()
+
+        # Case-insensitive file search
+        if not file_path.exists():
+            file_path = self._find_matching_file(raw_data_path, file_path.name)
+            if not file_path:
+                raise FileNotFoundError(
+                    f"Participant file not found in {raw_data_path}. "
+                    f"Tried: {file_spec}"
+                )
+
+        return file_path
 
     def _find_matching_file(self, directory: Path, filename: str) -> Optional[Path]:
         """Case-insensitive file search in directory"""
@@ -55,3 +97,58 @@ class ParticipantHandler:
             if f.name.lower() == target:
                 return f.resolve()
         return None
+
+    def get_participant_by_id(self, participant_id: str) -> Optional[Participant]:
+        """Get participant by ID"""
+        for participant in self.participants:
+            if participant.id == participant_id:
+                return participant
+        return None
+
+    def get_participant_ids(self) -> List[str]:
+        """Get list of all participant IDs"""
+        return [p.id for p in self.participants]
+
+    def get_participant_files(self) -> List[Path]:
+        """Get list of all participant file paths (for backward compatibility)"""
+        return [p.file_path for p in self.participants]
+
+    def validate_participant_files(self) -> List[str]:
+        """
+        Validate that all participant files exist
+        Returns list of missing files
+        """
+        missing_files = []
+        for participant in self.participants:
+            if not participant.file_path.exists():
+                missing_files.append(f"{participant.id}: {participant.file_path}")
+
+        if missing_files:
+            logger.warning(f"Missing participant files: {missing_files}")
+
+        return missing_files
+
+    def filter_participants(self, participant_ids: List[str]) -> List[Participant]:
+        """
+        Filter participants by IDs
+        Returns subset of participants that match the provided IDs
+        """
+        filtered = []
+        for participant_id in participant_ids:
+            participant = self.get_participant_by_id(participant_id)
+            if participant:
+                filtered.append(participant)
+            else:
+                logger.warning(f"Participant ID not found: {participant_id}")
+
+        return filtered
+
+    def get_participant_info(self) -> dict:
+        """Get summary information about participants"""
+        return {
+            'total_participants': len(self.participants),
+            'participant_ids': [p.id for p in self.participants],
+            'file_extensions': list(set(p.file_path.suffix for p in self.participants)),
+            'base_directory': str(self.config.raw_data_dir),
+            'missing_files': self.validate_participant_files()
+        }

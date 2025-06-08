@@ -26,6 +26,10 @@ def _get_event_times(raw, event_code):
     """Now just a thin wrapper"""
     try:
         event_samples = find_matching_events(raw, event_code)
+
+        #adjust event_samples for cropped object
+        event_samples -= raw.first_samp
+
         return event_samples / raw.info['sfreq']
     except ValueError as e:
         # Augment error with crop-specific context
@@ -39,7 +43,8 @@ def crop_data(
         inplace: bool = False,
         crop_before: Optional[Union[str, int]] = None,
         crop_after: Optional[Union[str, int]] = None,
-        show: bool = None
+        show: bool = None,
+        padded: bool = True,
 ) -> BaseRaw:
     """
     Crop raw EEG data using either absolute times or event markers.
@@ -67,12 +72,12 @@ def crop_data(
         if crop_before is not None:
             times = _get_event_times(current_raw, crop_before)
             if len(times) > 0:
-                start = times[0] - 10
+                start = times[0] - 10 if padded else times[0]
 
         if crop_after is not None:
             times = _get_event_times(current_raw, crop_after)
             if len(times) > 0:
-                end = times[-1] + 10
+                end = times[-1] + 10 if padded else times[-1]
 
         if start >= end:
             raise ValueError(
@@ -170,9 +175,14 @@ def segment_by_condition_markers(raw: BaseRaw,
     Returns:
         Raw object containing only the segmented data
 
+    Raises:
+        ValueError: If condition_markers are invalid or missing
+        RuntimeError: If segmentation fails due to data issues
+
     Note: Due to the nature of segmentation (cropping and concatenating),
           in-place operation replaces the original object's content entirely.
     """
+    # Critical validation - let these bubble up
     markers = condition.get('condition_markers')
     if not markers or len(markers) != 2:
         raise ValueError("Condition must have exactly 2 markers [start, end]")
@@ -183,42 +193,68 @@ def segment_by_condition_markers(raw: BaseRaw,
     working_data = raw.copy()
     sfreq = working_data.info['sfreq']
 
-    # Use the same event finding logic as crop_data
+    # Critical failure - event finding errors should bubble up
     try:
         start_times = _get_event_times(working_data, markers[0])
         end_times = _get_event_times(working_data, markers[1])
     except ValueError as e:
-        logger.error(f"Segmentation failed: {str(e)}")
-        return raw if inplace else raw.copy()
+        # This is a critical failure - data is corrupt or markers don't exist
+        logger.error(f"Event detection failed for markers {markers}: {str(e)}")
+        raise RuntimeError(f"Segmentation failed - cannot find events: {str(e)}") from e
 
+    # Critical validation - no events found means data is wrong
     if len(start_times) == 0 or len(end_times) == 0:
-        logger.warning(f"No segments found for markers {markers}")
-        return raw if inplace else raw.copy()
+        error_msg = f"No events found for markers {markers} - data may be corrupt or incorrect condition"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
 
-    # Validate and process segments
+    # Mismatch in event counts is also critical
+    if len(start_times) != len(end_times):
+        error_msg = f"Mismatched event counts: {len(start_times)} start events, {len(end_times)} end events"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    # Process segments
     segments = []
-    for start_time, end_time in zip(start_times, end_times):
-        tmin = max(start_time - padding, working_data.times[0])
-        tmax = min(end_time + padding, working_data.times[-1])
+    for i, (start_time, end_time) in enumerate(zip(start_times, end_times)):
+        try:
+            tmin = max(start_time - padding, working_data.times[0])
+            tmax = min(end_time + padding, working_data.times[-1])
 
-        if tmax > tmin:  # Valid segment
+            if tmax <= tmin:  # Invalid segment timing
+                logger.warning(f"Segment {i} has invalid timing: {tmin:.2f}s to {tmax:.2f}s - skipping")
+                continue
+
             segment = working_data.copy().crop(tmin=tmin, tmax=tmax)
             segments.append(segment)
 
-    if not segments:
-        logger.warning("No valid segments found")
-        return raw if inplace else raw.copy()
+        except Exception as e:
+            # Individual segment cropping failure - fail entire stage
+            error_msg = f"Failed to process segment {i} ({start_time:.2f}s-{end_time:.2f}s): {e}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e  # Changed from continue
 
-    # Create segmented data
-    if len(segments) > 1:
-        segmented_raw = concatenate_raws(segments)
-    else:
-        segmented_raw = segments[0]
+    # Critical failure - no valid segments at all
+    if not segments:
+        error_msg = f"No valid segments created from {len(start_times)} potential segments"
+
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    # Create final segmented data
+    try:
+        if len(segments) > 1:
+            segmented_raw = concatenate_raws(segments)
+        else:
+            segmented_raw = segments[0]
+    except Exception as e:
+        # Concatenation failure is critical
+        logger.error(f"Failed to concatenate segments: {e}")
+        raise RuntimeError(f"Segment concatenation failed: {e}") from e
 
     if inplace:
-        # Replace original object's content with segmented data
         logger.info(f"Segmented data applied in-place: {len(segments)} segments")
-        return _replace_raw_content(raw, segmented_raw)  # Fixed: was using working_data
+        return _replace_raw_content(raw, segmented_raw)
     else:
         logger.info(f"Segmentation completed: {len(segments)} segments")
         return segmented_raw

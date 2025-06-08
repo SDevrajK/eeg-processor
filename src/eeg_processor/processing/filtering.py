@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 def filter_data(raw: BaseRaw,
                 l_freq: Optional[float] = None,
                 h_freq: Optional[float] = None,
-                inplace: bool = False,  # Add this parameter
+                notch: Union[bool, float, List[float], None] = None,
+                inplace: bool = False,
                 **filter_kwargs) -> BaseRaw:
     """Apply filtering with optional in-place operation"""
-
 
     if hasattr(raw, 'preload') and not raw.preload:
         logger.info("Data not preloaded - loading into memory for filtering...")
@@ -28,7 +28,20 @@ def filter_data(raw: BaseRaw,
         else:
             current_data = raw.copy()
 
-    # Apply bandpass filter
+    # Apply notch filter FIRST
+    if notch is not None:
+        notch_freqs = _parse_notch_freqs(notch)
+        if notch_freqs:  # Only apply if we have frequencies to notch
+            logger.info(f"Applying notch filter at frequencies: {notch_freqs}")
+            current_data.notch_filter(
+                freqs=notch_freqs,
+                method='fir',
+                phase='zero-double',
+                fir_window='hamming',
+                verbose=False
+            )
+
+    # Apply bandpass filter SECOND
     if l_freq is not None or h_freq is not None:
         current_data.filter(
             l_freq=l_freq,

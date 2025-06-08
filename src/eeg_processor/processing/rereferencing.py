@@ -95,7 +95,7 @@ def set_reference(
             # Create forward solution
             forward = mne.make_forward_solution(
                 raw_ref.info,
-                trans='fsaverage',  # Use template transformation
+                trans='fsaverage',
                 src=src,
                 bem=bem_sol,
                 meg=False,

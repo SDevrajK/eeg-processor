@@ -1,3 +1,18 @@
+# At the very top of pipeline.py, before other imports
+import pathlib
+import unicodedata
+
+# Monkey patch pathlib.Path to always normalize Unicode
+_original_path_new = pathlib.Path.__new__
+
+def _normalized_path_new(cls, *args, **kwargs):
+    if args:
+        normalized_arg = unicodedata.normalize('NFC', str(args[0]))
+        args = (normalized_arg,) + args[1:]
+    return _original_path_new(cls, *args, **kwargs)
+
+pathlib.Path.__new__ = _normalized_path_new
+
 from pathlib import Path
 from loguru import logger
 from typing import Dict, List, Optional, Union
@@ -9,12 +24,12 @@ from mne.time_frequency import AverageTFR, Spectrum, RawTFR
 
 # helper imports
 from .utils.config_loader import load_config
-from .utils.quality_tracker import QualityTracker, extract_bad_channel_metrics, extract_epoch_metrics, extract_ica_metrics
+from .quality_control.quality_tracker import QualityTracker
 from .state_management.data_processor import DataProcessor
 from .state_management.participant_handler import ParticipantHandler
 from .state_management.result_saver import ResultSaver
 from .file_io import load_raw
-
+from .utils.memory_tools import get_memory_pressure, get_memory_metrics
 
 class EEGPipeline:
     def __init__(self, config_path: str = None):
@@ -48,6 +63,11 @@ class EEGPipeline:
         if not self.config:
             raise ValueError("Configuration not loaded. Call load_config() first.")
         return AnalysisInterface(self.config, self.config.results_dir)
+
+    def set_quality_tracker(self, quality_tracker):
+        """Allow external quality tracker injection for session-based processing"""
+        self.quality_tracker = quality_tracker
+        logger.debug("External quality tracker injected for session processing")
 
     def apply_stage(self,
                     data: Union[BaseRaw, Epochs, Evoked],
@@ -142,21 +162,34 @@ class EEGPipeline:
 
         current_data = raw.copy()
         previous_type = type(current_data)
+        failed_stage = None
 
         try:
             for stage_config in self.config.stages:
                 stage_name, stage_params = self._parse_stage_config(stage_config)
+                failed_stage = stage_name  # Track which stage we're attempting
 
+                # Track Memory Usage
+                memory_before = get_memory_pressure()
+
+                ### Apply the current stage ###
                 logger.debug(f"Applying stage: {stage_name}")
                 new_data = self.processor.apply_processing_stage(current_data, stage_name, **stage_params)
 
-                # Track quality metrics for specific stages
-                self._track_stage_quality(current_data, new_data, stage_name, participant_id, condition)
+                # Track Memory Usage
+                memory_after = get_memory_pressure()
+                memory_metrics = get_memory_metrics(memory_before, memory_after)
+
+                # Track successful stage
+                self._track_stage_quality(current_data, new_data, stage_name, participant_id, condition, memory_metrics)
 
                 # Handle type transitions - save interim results
                 current_type = type(new_data)
                 if current_type != previous_type:
-                    self._save_interim_data(current_data, participant_id, condition, previous_type)
+                    # Check if saving is disabled for the stage that produced this data
+                    should_save = stage_params.get('save', True)  # Default to True
+                    if should_save:
+                        self._save_interim_data(current_data, participant_id, condition, previous_type)
 
                     # Memory cleanup
                     if current_data is not raw and id(current_data) != id(raw):
@@ -164,23 +197,41 @@ class EEGPipeline:
 
                     previous_type = current_type
 
+                # Check if we're approaching limits
+                if memory_after['pressure_level'] == 'critical':
+                    logger.warning(f"High memory pressure after {stage_name}: {memory_after['used_percent']:.1f}%")
+                elif memory_after['pressure_level'] == 'abort':
+                    logger.error(f"Memory critical - aborting participant {participant_id}")
+                    # Handle gracefully - mark participant as failed due to memory
+                    self.quality_tracker.track_completion(participant_id, condition['name'],
+                                                          success=False, error="Memory exceeded system limits")
+                    break  # Exit stage loop for this condition
+
                 current_data = new_data
                 self._update_pipeline_state(current_data)
 
-            # Final save for end result
+            # All stages completed successfully
             self._save_interim_data(current_data, participant_id, condition, type(current_data))
-
-            # Mark condition as successful
             self.quality_tracker.track_completion(participant_id, condition['name'], success=True)
 
         except Exception as e:
-            # Mark condition as failed
+            # Record which stage failed
+            if failed_stage:
+                self.quality_tracker.track_stage(participant_id, condition['name'], failed_stage, {
+                    'stage_failed': True,
+                    'error': str(e),
+                })
+
+            # Mark condition as failed and continue to next condition (no raise)
             self.quality_tracker.track_completion(participant_id, condition['name'],
-                                                  success=False, error=str(e))
-            raise
+                                                  success=False,
+                                                  error=f"Stage '{failed_stage}' failed: {str(e)}")
+            logger.error(
+                f"Condition '{condition['name']}' failed at stage '{failed_stage}' for {participant_id}: {str(e)}")
+
 
     def _track_stage_quality(self, input_data, output_data, stage_name: str,
-                             participant_id: str, condition: dict):
+                             participant_id: str, condition: dict, memory_metrics: dict) -> None:
         """Minimal quality tracking - delegates to QualityTracker"""
 
         if self.quality_tracker:
@@ -189,7 +240,8 @@ class EEGPipeline:
                 output_data=output_data,
                 stage_name=stage_name,
                 participant_id=participant_id,
-                condition_name=condition['name']
+                condition_name=condition['name'],
+                memory_metrics=memory_metrics
             )
         else:
             logger.warning("Quality tracker not initialized - skipping quality tracking")
@@ -208,11 +260,11 @@ class EEGPipeline:
         """Save interim data based on type using the updated ResultSaver"""
         if data_type in [Epochs, Evoked, AverageTFR, Spectrum, RawTFR]:
             # Add metadata for epochs if needed
-            if isinstance(data, Epochs):
-                from processing.epoching import extract_event_metadata
-                metadata_df = extract_event_metadata(data, condition)
-                if metadata_df is not None:
-                    data.metadata = metadata_df
+            # if isinstance(data, Epochs):
+            #     from .processing.epoching import extract_event_metadata
+            #     metadata_df = extract_event_metadata(data, condition)
+            #     if metadata_df is not None:
+            #         data.metadata = metadata_df
 
             # Use save_data_object for automatic type detection and proper method routing
             self.result_saver.save_data_object(
@@ -258,7 +310,7 @@ class EEGPipeline:
             return None
 
         try:
-            from .utils.quality_reporter import generate_quality_reports
+            from .quality_control.quality_reporter import generate_quality_reports
 
             # Generate reports from the saved metrics
             summary_path, participant_paths = generate_quality_reports(self.config.results_dir)

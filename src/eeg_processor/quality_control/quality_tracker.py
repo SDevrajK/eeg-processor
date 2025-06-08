@@ -1,5 +1,3 @@
-# utils/quality_tracker.py - Enhanced with all quality logic
-
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 import json
@@ -17,6 +15,12 @@ class QualityTracker:
         self.results_dir = Path(results_dir)
         self.metrics = {}
         self.start_time = datetime.now()
+
+        self.memory_thresholds = {
+            'warning': 70,  # 70% system memory used
+            'critical': 85,  # 85% system memory used
+            'abort': 95  # 95% system memory used (stop processing)
+        }
 
         # Ensure quality directory exists
         self.quality_dir = self.results_dir / "quality"
@@ -43,7 +47,7 @@ class QualityTracker:
             }
 
     def track_stage_data(self, input_data, output_data, stage_name: str,
-                         participant_id: str, condition_name: str):
+                         participant_id: str, condition_name: str, memory_metrics: dict = None):
         """
         Main entry point for stage quality tracking.
 
@@ -54,6 +58,15 @@ class QualityTracker:
         try:
             # Extract metrics based on stage type
             metrics = self._extract_stage_metrics(input_data, output_data, stage_name)
+
+            if memory_metrics:
+                metrics['memory'] = memory_metrics
+
+                # Log memory warnings
+                pressure_level = memory_metrics.get('pressure_level', 'normal')
+                if pressure_level in ['warning', 'critical']:
+                    logger.warning(f"Memory pressure {pressure_level} after {stage_name}: "
+                                   f"{memory_metrics['memory_after']['used_percent']:.1f}% system memory")
 
             if metrics:
                 # Store the metrics

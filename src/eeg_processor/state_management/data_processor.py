@@ -11,11 +11,12 @@ T = TypeVar('T', BaseRaw, Epochs, Evoked)
 class DataProcessor:
     def __init__(self):
         self.current_condition = None
-        self._batch_mode = False  # Add this flag
+        self._batch_mode = False 
         self.stage_registry = {
             # Data handling
             "crop": self._crop,
             "adjust_events": self._adjust_event_times,
+            "correct_triggers": self._correct_triggers, 
 
             # Pre-processing
             "filter": self._apply_filter,
@@ -30,7 +31,10 @@ class DataProcessor:
 
             # Post-epoching
             "time_frequency": self._time_frequency_analysis,
-            "time_frequency_raw": self._time_frequency_raw_analysis,  # New raw TFR stage
+            "time_frequency_raw": self._time_frequency_raw_analysis,
+            "time_frequency_average": self._time_frequency_average,
+
+            # Other
             "view": self._view_data
         }
 
@@ -73,6 +77,24 @@ class DataProcessor:
         from ..utils.raw_data_tools import adjust_event_times
         return adjust_event_times(raw=data, shift_ms=shift_ms, target_events=target_events, protect_events=protect_events, inplace=inplace, **kwargs)
 
+    # Add this method to your DataProcessor class
+    def _correct_triggers(self, data: BaseRaw,
+                          method: str = "alternating",
+                          inplace: bool = False,
+                          **kwargs) -> BaseRaw:
+        """Trigger correction with inplace parameter passed to external function"""
+        if not self.current_condition:
+            raise ValueError("Condition must be set for trigger correction")
+
+        from ..utils.correct_triggers import correct_triggers
+        return correct_triggers(
+            raw=data,
+            condition=self.current_condition,
+            method=method,
+            inplace=inplace,
+            **kwargs
+        )
+    
     ## --- Preprocessing --- ##
 
     def _apply_filter(self, data: Union[BaseRaw, Epochs],
@@ -93,12 +115,11 @@ class DataProcessor:
         return compute_eog_channels(raw=data, heog_pair=heog_pair, veog_pair=veog_pair, inplace=inplace, **kwargs)
 
     def _detect_bad_channels(self, data: BaseRaw,
-                             segment_wise: bool = False,
                              inplace: bool = False,
                              **kwargs) -> BaseRaw:
         """Bad channel detection with inplace parameter"""
         from ..processing.bad_channels import detect_bad_channels
-        return detect_bad_channels(data, segment_wise=segment_wise, inplace=inplace, **kwargs)
+        return detect_bad_channels(data, inplace=inplace, **kwargs)
 
     def _rereference(self, data: BaseRaw,
                      method: str = "average",
@@ -169,8 +190,8 @@ class DataProcessor:
     ## --- More --- ##
 
     def _time_frequency_analysis(self, data: Epochs,
-                                 freq_range: List[float] = [1, 40],
-                                 n_freqs: int = 20,
+                                 freq_range: List[float] = [1, 50],
+                                 n_freqs: int = 100,
                                  method: str = "morlet",
                                  n_cycles: Union[float, List[float]] = None,
                                  compute_itc: bool = True,
@@ -196,8 +217,8 @@ class DataProcessor:
         if inplace:
             logger.info("inplace=True ignored for time-frequency analysis - always creates new AverageTFR object")
 
-        from ..processing.time_frequency import compute_tfr_average
-        return compute_tfr_average(
+        from ..processing.time_frequency import compute_epochs_tfr_average
+        return compute_epochs_tfr_average(
             epochs=data,
             freq_range=freq_range,
             n_freqs=n_freqs,
@@ -250,6 +271,34 @@ class DataProcessor:
             )
         else:
             raise ValueError(f"Unknown output_type: '{output_type}'. Use 'spectrum' or 'raw_tfr'")
+
+    def _time_frequency_average(self, data,
+                                method: str = "mean",
+                                inplace: bool = False,  # Ignored - always creates new object
+                                **kwargs) -> AverageTFR:
+        """
+        Convert TFR objects to AverageTFR by averaging
+
+        Handles both:
+        - RawTFR → AverageTFR (average across time)
+        - EpochsTFR → AverageTFR (average across trials)
+
+        Args:
+            data: RawTFR or EpochsTFR object
+            method: Averaging method ('mean', 'median')
+            inplace: Ignored - always creates new AverageTFR object
+
+        Returns:
+            AverageTFR object
+        """
+        from ..processing.time_frequency import compute_raw_tfr_average, compute_epochs_tfr_average
+
+        if hasattr(data, 'data') and data.data.ndim == 3:  # RawTFR case
+            return compute_raw_tfr_average(data, method=method, **kwargs)
+        elif hasattr(data, 'data') and data.data.ndim == 4:  # EpochsTFR case
+            return compute_epochs_tfr_average(data, method=method, **kwargs)
+        else:
+            raise ValueError(f"Unsupported data type for averaging: {type(data)}")
 
     def _view_data(self,
                    data: Union[BaseRaw, Epochs, Evoked],

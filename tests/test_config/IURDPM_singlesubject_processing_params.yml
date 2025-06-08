@@ -1,0 +1,44 @@
+
+# Paths (relative to tests)
+paths:
+  raw_data: "../test_data/brainvision/"  # Single test file
+  results_dir: "../test_results/"
+  participants: ["GINMMN_07.vhdr"]  # Optional - when omitted, loads all *.vhdr files
+
+# Conditions
+conditions:
+  - name: "BroadBand"           # Condition name
+    epoch_events: {"Standards": {"Standard": "1"}, "Deviants": {"2ms": "2", "5ms": "3", "7ms": "4", "10ms": "5", "20ms": "6", "30ms": "7", "40ms": "8"}}       # Trigger codes marking this condition
+    condition_markers: [11, 18]  # Tuple: [start, end] event codes (optional)
+  - name: "NarrowBand Within-Channel"
+    epoch_events: {"Standards": {"Standard": "1"}, "Deviants": {"2ms": "2", "5ms": "3", "7ms": "4", "10ms": "5", "20ms": "6", "30ms": "7", "40ms": "8"}}       # Trigger codes marking this condition
+    condition_markers: [35, 36]  # Tuple: [start, end] event codes (optional)
+  - name: "NarrowBand Between-Channel"
+    epoch_events: {"Standards": {"Standard": "1"}, "Deviants": {"2ms": "2", "5ms": "3", "7ms": "4", "10ms": "5", "20ms": "6", "30ms": "7", "40ms": "8"}}       # Trigger codes marking this condition
+    condition_markers: [10, 20]  # Tuple: [start, end] event codes (optional)
+
+
+# Minimal processing stages
+stages:
+  - adjust_events:
+      shift_ms: 400
+  - crop:
+      crop_after: 20
+  - segment_condition:
+  - compute_eog:
+      heog_pair: [ 'FT10', 'FT9' ]
+      veog_pair: [ 'Fp2', 'EOG']
+  - filter:
+      l_freq: 1
+  - blink_artifact:
+      method: ica
+      plot_components: False
+      decim: 3
+  - filter:
+      h_freq: 20
+  - epoch:
+      tmin: -0.2
+      tmax: .6
+      baseline: [-0.2, 0]
+      reject:
+        eeg: 250e-6

@@ -90,27 +90,27 @@ class ResultSaver:
                 subset_epochs = epochs[epochs.metadata['event_type'] == group]
 
                 # Generate BIDS-compliant filenames
-                epochs_filename = self._get_filename(participant_id, f"{condition_name}{group}", "epochs", "fif")
+                epochs_filename = self._get_filename(participant_id, f"{condition_name}{group}", "epo", "fif")
                 epochs_path = self.output_root / 'interim' / epochs_filename
                 subset_epochs.save(epochs_path, overwrite=overwrite)
                 self.logger.info(f"Saved epochs for {group} to {epochs_path}")
 
                 # Save evoked data for this group
                 evoked = subset_epochs.average()
-                evoked_filename = self._get_filename(participant_id, f"{condition_name}{group}", "evoked", "fif")
+                evoked_filename = self._get_filename(participant_id, f"{condition_name}{group}", "ave", "fif")
                 evoked_path = self.output_root / 'processed' / evoked_filename
                 evoked.save(evoked_path, overwrite=overwrite)
                 self.logger.info(f"Saved evoked for {group} to {evoked_path}")
         else:
             # No event grouping - save normally
-            epochs_filename = self._get_filename(participant_id, condition_name, "epochs", "fif")
+            epochs_filename = self._get_filename(participant_id, condition_name, "epo", "fif")
             epochs_path = self.output_root / 'interim' / epochs_filename
             epochs.save(epochs_path, overwrite=overwrite)
             self.logger.info(f"Saved epochs to {epochs_path}")
 
             # Save evoked
             evoked = epochs.average()
-            evoked_filename = self._get_filename(participant_id, condition_name, "evoked", "fif")
+            evoked_filename = self._get_filename(participant_id, condition_name, "ave", "fif")
             evoked_path = self.output_root / 'processed' / evoked_filename
             evoked.save(evoked_path, overwrite=overwrite)
             self.logger.info(f"Saved evoked to {evoked_path}")

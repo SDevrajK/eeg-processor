@@ -6,9 +6,9 @@ from typing import List, Union, Optional, Tuple
 from loguru import logger
 
 
-def compute_tfr_average(epochs: Epochs,
+def compute_epochs_tfr_average(epochs: Epochs,
                         freq_range: List[float] = [1, 50],
-                        n_freqs: int = 20,
+                        n_freqs: int = 100,
                         method: str = "morlet",
                         n_cycles: Union[float, List[float]] = None,
                         compute_itc: bool = True,
@@ -46,8 +46,21 @@ def compute_tfr_average(epochs: Epochs,
 
     # Compute time-frequency decomposition
     if method == "morlet":
-        power, itc = tfr_morlet(
-            epochs,
+        power, itc = epochs.compute_tfr(
+            method=method,
+            freqs=freqs,
+            n_cycles=n_cycles,
+            use_fft=True,
+            return_itc=compute_itc,
+            average=True,  # Return AverageTFR, not EpochsTFR
+            n_jobs=1,
+            picks='eeg',
+            verbose=False,
+            **kwargs
+        )
+    elif method == "multitaper":
+        power, itc = epochs.compute_tfr(
+            method=method,
             freqs=freqs,
             n_cycles=n_cycles,
             use_fft=True,
@@ -55,18 +68,7 @@ def compute_tfr_average(epochs: Epochs,
             average=True,  # Return AverageTFR, not EpochsTFR
             n_jobs=1,
             verbose=False,
-            **kwargs
-        )
-    elif method == "multitaper":
-        power, itc = tfr_multitaper(
-            epochs,
-            freqs=freqs,
-            n_cycles=n_cycles,
-            use_fft=True,
-            return_itc=compute_itc,
-            average=True,
-            n_jobs=1,
-            verbose=False,
+            picks='eeg',
             **kwargs
         )
     else:
@@ -182,7 +184,7 @@ def compute_raw_tfr(raw: BaseRaw,
                     n_freqs: int = 20,
                     method: str = "morlet",
                     n_cycles: Union[float, List[float]] = None,
-                    decim: int = 3,
+                    decim: int = 8,
                     n_jobs: int = 1,
                     **kwargs):
     """
@@ -223,7 +225,7 @@ def compute_raw_tfr(raw: BaseRaw,
 
     # Compute continuous time-frequency decomposition directly on raw data
     if method == "morlet":
-        power = raw.compute_tfr(
+        raw_tfr = raw.compute_tfr(
             method="morlet",
             freqs=freqs,
             n_cycles=n_cycles,
@@ -231,11 +233,10 @@ def compute_raw_tfr(raw: BaseRaw,
             decim=decim,
             n_jobs=n_jobs,
             verbose=False,
-            **kwargs
         )
 
     elif method == "stockwell":
-        power = raw.compute_tfr(
+        raw_tfr = raw.compute_tfr(
             method="stockwell",
             fmin=freq_range[0],
             fmax=freq_range[1],
@@ -244,17 +245,54 @@ def compute_raw_tfr(raw: BaseRaw,
             decim=decim,
             n_jobs=n_jobs,
             verbose=False,
-            **kwargs
         )
 
     else:
         raise ValueError(f"Unknown method: '{method}'. Use 'morlet' or 'stockwell'")
 
     # Convert to power (if complex values returned)
-    if np.iscomplexobj(power.data):
-        power.data = np.abs(power.data) ** 2
+    if np.iscomplexobj(raw_tfr.data):
+        raw_tfr.data = np.abs(raw_tfr.data) ** 2
 
-    logger.success(f"Continuous TFR computed: {power.data.shape} (channels × freqs × times)")
+    logger.success(f"Continuous TFR computed: {raw_tfr.data.shape} (channels × freqs × times)")
     logger.info(f"Time resolution: {1 / (raw.info['sfreq'] / decim):.3f}s, Frequency resolution: {len(freqs)} points")
 
-    return power
+    return raw_tfr
+
+
+def compute_raw_tfr_average(raw_tfr,
+                            method: str = "mean",
+                            **kwargs) -> AverageTFR:
+    """
+    Convert RawTFR to AverageTFR by averaging across time dimension
+
+    Args:
+        raw_tfr: RawTFR object from compute_raw_tfr()
+        method: Averaging method ('mean', 'median')
+        **kwargs: Additional parameters (reserved for future use)
+
+    Returns:
+        AverageTFR object with time dimension collapsed
+    """
+    logger.info(f"Converting RawTFR to AverageTFR: averaging across {raw_tfr.data.shape[-1]} time points")
+
+    # Average across time dimension (last axis)
+    if method == "mean":
+        averaged_data = np.mean(raw_tfr.data, axis=-1, keepdims=True)
+    elif method == "median":
+        averaged_data = np.median(raw_tfr.data, axis=-1, keepdims=True)
+    else:
+        raise ValueError(f"Unknown averaging method: '{method}'. Use 'mean' or 'median'")
+
+    # Create AverageTFR using the proper class method
+    averaged_tfr = AverageTFR(
+        info=raw_tfr.info,
+        data=averaged_data,
+        times=np.array([0.0]),
+        freqs=raw_tfr.freqs,
+        nave=1,
+        comment=f"Time-averaged from RawTFR ({method})"
+    )
+
+    logger.success(f"RawTFR averaged: {raw_tfr.data.shape} → {averaged_tfr.data.shape}")
+    return averaged_tfr
