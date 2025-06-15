@@ -25,6 +25,14 @@ def load_config(config_path: str) -> PipelineConfig:
     return validate_config(raw_config, config_path.parent)
 
 
+def load_config_from_dict(config_data: Dict, base_path: Path = None) -> PipelineConfig:
+    """Load and validate config from dictionary data."""
+    if base_path is None:
+        base_path = Path.cwd()
+    
+    return validate_config(config_data, base_path)
+
+
 def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     """Validate and convert raw config dict to PipelineConfig."""
     paths = raw_config.get('paths', {})
@@ -42,7 +50,7 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     # Get the correct raw data path key
     raw_data_dir = abs_paths.get('raw_data_dir')
     if not raw_data_dir:
-        raise ValueError("Config must specify 'raw_data' path")
+        raise ValueError("Config must specify 'raw_data_dir' path")
 
     if 'participants' in paths:
         participants_data = paths['participants']

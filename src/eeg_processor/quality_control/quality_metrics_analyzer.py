@@ -17,12 +17,33 @@ class QualityMetricsAnalyzer:
     rather than raw EEG data processing.
     """
 
-    def __init__(self, metrics_file: Path):
-        self.metrics_file = Path(metrics_file)
-        self.quality_dir = self.metrics_file.parent
-
-        with open(self.metrics_file, 'r') as f:
-            self.data = json.load(f)
+    def __init__(self, metrics_file_or_data, quality_dir: Path = None):
+        """
+        Initialize analyzer with either a file path or data dict
+        
+        Args:
+            metrics_file_or_data: Either Path to metrics file or dict containing metrics data
+            quality_dir: Quality directory path (required if passing data dict)
+        """
+        if isinstance(metrics_file_or_data, (str, Path)):
+            # File path provided - load from file
+            self.metrics_file = Path(metrics_file_or_data)
+            self.quality_dir = self.metrics_file.parent
+            
+            with open(self.metrics_file, 'r') as f:
+                self.data = json.load(f)
+                
+        elif isinstance(metrics_file_or_data, dict):
+            # Data dict provided - use directly
+            self.data = metrics_file_or_data
+            self.metrics_file = None
+            
+            if quality_dir is None:
+                raise ValueError("quality_dir must be provided when passing data dict")
+            self.quality_dir = Path(quality_dir)
+            
+        else:
+            raise ValueError("metrics_file_or_data must be either a file path or data dict")
 
         # Quality thresholds - could be configurable in future
         self.thresholds = {
@@ -54,7 +75,7 @@ class QualityMetricsAnalyzer:
     def get_completion_statistics(self, participants: Dict) -> Dict:
         """Extract detailed completion statistics"""
         total_participants = len(participants)
-        completed_participants = sum(1 for p in participants.values() if p['completed'])
+        completed_participants = sum(1 for k, p in participants.items() if p['completed'])
 
         condition_success = {}
         condition_failures = {}
