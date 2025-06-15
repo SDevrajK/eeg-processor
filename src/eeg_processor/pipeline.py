@@ -54,7 +54,13 @@ class EEGPipeline:
         # Initialize quality tracker
         self.quality_tracker = QualityTracker(self.config.results_dir)
 
-        logger.info(f"Configuration loaded: {len(self.config.participants)} participants")
+        # Log configuration details
+        if self.config.dataset_name:
+            logger.info(f"Configuration loaded: {len(self.config.participants)} participants for dataset '{self.config.dataset_name}'")
+            logger.info(f"Results will be saved to: {self.config.results_dir}")
+        else:
+            logger.info(f"Configuration loaded: {len(self.config.participants)} participants")
+        
         return self
 
     def get_analysis_interface(self):

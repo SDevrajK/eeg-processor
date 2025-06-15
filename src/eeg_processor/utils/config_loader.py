@@ -14,6 +14,7 @@ class PipelineConfig:
     participants: Union[Dict[str, str], List[str]]  # Raw participants data
     stages: List[Union[str, Dict]]
     conditions: List[Dict]
+    dataset_name: Optional[str] = None  # Optional dataset name for organizing results
 
 
 def load_config(config_path: str) -> PipelineConfig:
@@ -56,6 +57,27 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     if not participants_data:
         raise ValueError("No participants found. Check participants specification or raw_data path.")
 
+    # Handle dataset_name for result organization
+    dataset_name = raw_config.get('dataset_name', None)
+    
+    # Adjust result paths if dataset_name is provided
+    base_results_dir = abs_paths.get('results_dir')
+    if dataset_name and base_results_dir:
+        # Create dataset-specific subdirectory
+        dataset_results_dir = base_results_dir / dataset_name
+        dataset_interim_dir = dataset_results_dir / "interim" if not abs_paths.get('interim_dir') else abs_paths.get('interim_dir')
+        dataset_figures_dir = dataset_results_dir / "figures" if not abs_paths.get('figures_dir') else abs_paths.get('figures_dir')
+        
+        # Use dataset-specific paths
+        final_results_dir = dataset_results_dir
+        final_interim_dir = dataset_interim_dir
+        final_figures_dir = dataset_figures_dir
+    else:
+        # Use original paths
+        final_results_dir = base_results_dir
+        final_interim_dir = abs_paths.get('interim_dir')
+        final_figures_dir = abs_paths.get('figures_dir')
+
     # Validate conditions if present
     conditions = raw_config.get('conditions', [])
     for cond in conditions:
@@ -70,14 +92,15 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
                     f"Condition {cond['name']}: condition_markers must be a list of 2 elements [start, end]")
 
     return PipelineConfig(
-        raw_data_dir=raw_data_dir,  # Use the corrected variable
-        interim_dir=abs_paths.get('interim_dir'),
-        results_dir=abs_paths.get('results_dir'),
-        figures_dir=abs_paths.get('figures_dir'),
+        raw_data_dir=raw_data_dir,
+        interim_dir=final_interim_dir,
+        results_dir=final_results_dir,
+        figures_dir=final_figures_dir,
         file_extension=paths.get('file_extension', '.vhdr'),
-        participants=participants_data,  # Pass raw data to ParticipantHandler
+        participants=participants_data,
         stages=raw_config.get('stages', []),
-        conditions=conditions
+        conditions=conditions,
+        dataset_name=dataset_name
     )
 
 
