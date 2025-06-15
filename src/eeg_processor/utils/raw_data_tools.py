@@ -43,6 +43,8 @@ def crop_data(
         inplace: bool = False,
         crop_before: Optional[Union[str, int]] = None,
         crop_after: Optional[Union[str, int]] = None,
+        segment_start: Optional[Union[str, int]] = None,
+        segment_end: Optional[Union[str, int]] = None,
         show: bool = None,
         padded: bool = True,
 ) -> BaseRaw:
@@ -66,7 +68,7 @@ def crop_data(
         end = current_end if t_max is None else t_max
 
     # --- Event-based cropping ---
-    elif crop_before is not None or crop_after is not None:
+    elif crop_before is not None or crop_after is not None or segment_start is not None or segment_end is not None:
         start, end = current_start, current_end
 
         if crop_before is not None:
@@ -76,6 +78,16 @@ def crop_data(
 
         if crop_after is not None:
             times = _get_event_times(current_raw, crop_after)
+            if len(times) > 0:
+                end = times[-1] + 10 if padded else times[-1]
+
+        if segment_start is not None:
+            times = _get_event_times(current_raw, segment_start)
+            if len(times) > 0:
+                start = times[0] - 10 if padded else times[0]
+
+        if segment_end is not None:
+            times = _get_event_times(current_raw, segment_end)
             if len(times) > 0:
                 end = times[-1] + 10 if padded else times[-1]
 
@@ -157,6 +169,42 @@ def adjust_event_times(raw: BaseRaw,
     return result
 
 
+def _pair_last_start_before_end(start_times, end_times):
+    """
+    For each end event, find the most recent start event that precedes it.
+    Handles restarts by using the last start before each end.
+
+    Args:
+        start_times: List of start event times
+        end_times: List of end event times
+
+    Returns:
+        List of (start_time, end_time) tuples
+    """
+    start_times = np.array(sorted(start_times))
+    end_times = np.array(sorted(end_times))
+
+    pairs = []
+    used_starts = set()
+
+    for end_time in end_times:
+        # Find all starts that come before this end
+        valid_start_indices = np.where(start_times < end_time)[0]
+
+        # Of those, find the most recent one that hasn't been used
+        best_start_idx = None
+        for idx in reversed(valid_start_indices):  # Search backwards (most recent first)
+            if idx not in used_starts:
+                best_start_idx = idx
+                break
+
+        if best_start_idx is not None:
+            start_time = start_times[best_start_idx]
+            pairs.append((start_time, end_time))
+            used_starts.add(best_start_idx)
+
+    return pairs
+
 def segment_by_condition_markers(raw: BaseRaw,
                                  condition: dict,
                                  padding: float = 5.0,
@@ -198,7 +246,6 @@ def segment_by_condition_markers(raw: BaseRaw,
         start_times = _get_event_times(working_data, markers[0])
         end_times = _get_event_times(working_data, markers[1])
     except ValueError as e:
-        # This is a critical failure - data is corrupt or markers don't exist
         logger.error(f"Event detection failed for markers {markers}: {str(e)}")
         raise RuntimeError(f"Segmentation failed - cannot find events: {str(e)}") from e
 
@@ -208,20 +255,31 @@ def segment_by_condition_markers(raw: BaseRaw,
         logger.error(error_msg)
         raise RuntimeError(error_msg)
 
-    # Mismatch in event counts is also critical
+    # NEW: Handle mismatched events with intelligent pairing
     if len(start_times) != len(end_times):
-        error_msg = f"Mismatched event counts: {len(start_times)} start events, {len(end_times)} end events"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        logger.warning(f"Mismatched events: {len(start_times)} starts, {len(end_times)} ends. "
+                       f"Using last-start-before-end pairing strategy.")
+
+        event_pairs = _pair_last_start_before_end(start_times, end_times)
+
+        if not event_pairs:
+            raise RuntimeError("No valid start-end pairs found using pairing strategy")
+
+        logger.info(f"Paired {len(event_pairs)} segments from mismatched events")
+
+    else:
+        # Perfect match - use existing logic
+        event_pairs = list(zip(start_times, end_times))
+        logger.info(f"Perfect event match: {len(event_pairs)} segments")
 
     # Process segments
     segments = []
-    for i, (start_time, end_time) in enumerate(zip(start_times, end_times)):
+    for i, (start_time, end_time) in enumerate(event_pairs):
         try:
             tmin = max(start_time - padding, working_data.times[0])
             tmax = min(end_time + padding, working_data.times[-1])
 
-            if tmax <= tmin:  # Invalid segment timing
+            if tmax <= tmin:
                 logger.warning(f"Segment {i} has invalid timing: {tmin:.2f}s to {tmax:.2f}s - skipping")
                 continue
 
@@ -229,10 +287,9 @@ def segment_by_condition_markers(raw: BaseRaw,
             segments.append(segment)
 
         except Exception as e:
-            # Individual segment cropping failure - fail entire stage
             error_msg = f"Failed to process segment {i} ({start_time:.2f}s-{end_time:.2f}s): {e}"
             logger.error(error_msg)
-            raise RuntimeError(error_msg) from e  # Changed from continue
+            raise RuntimeError(error_msg) from e
 
     # Critical failure - no valid segments at all
     if not segments:

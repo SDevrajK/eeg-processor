@@ -23,7 +23,7 @@ from mne import Epochs, Evoked
 from mne.time_frequency import AverageTFR, Spectrum, RawTFR
 
 # helper imports
-from .utils.config_loader import load_config, load_config_from_dict
+from .utils.config_loader import load_config
 from .quality_control.quality_tracker import QualityTracker
 from .state_management.data_processor import DataProcessor
 from .state_management.participant_handler import ParticipantHandler
@@ -45,16 +45,9 @@ class EEGPipeline:
         if config_path:
             self.load_config(config_path)
 
-    def load_config(self, config_path: str = None, config_data: Dict = None):
+    def load_config(self, config_path: str):
         """Load configuration and setup pipeline components"""
-        if config_path and config_data:
-            raise ValueError("Provide either config_path or config_data, not both")
-        elif config_path:
-            self.config = load_config(config_path)
-        elif config_data:
-            self.config = load_config_from_dict(config_data)
-        else:
-            raise ValueError("Must provide either config_path or config_data")
+        self.config = load_config(config_path)
         self.participant_handler = ParticipantHandler(self.config)
         self.result_saver = ResultSaver(self.config.results_dir)
 
@@ -309,25 +302,6 @@ class EEGPipeline:
         participant = next(p for p in self.participant_handler.participants
                            if p.id == participant_id)
         return self.load_raw(participant.file_path)
-
-    def add_participant_metadata(self, csv_path: str, participant_id_column: str = "participant_id",
-                                 data_types: Optional[Dict[str, str]] = None):
-        """
-        Add participant metadata from CSV file.
-
-        Args:
-            csv_path: Path to CSV file containing metadata
-            participant_id_column: Column name containing participant IDs
-            data_types: Optional dict for data type conversion (e.g., {'age': 'int'})
-
-        Returns:
-            Self for method chaining
-        """
-        if not self.participant_handler:
-            raise ValueError("Configuration not loaded. Call load_config() first.")
-
-        self.participant_handler.add_metadata(csv_path, participant_id_column, data_types)
-        return self
 
     def generate_quality_reports(self):
         """Generate HTML quality reports after processing"""
