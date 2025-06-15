@@ -6,20 +6,37 @@ import json
 from .quality_reporter import QualityReporter
 
 
-def generate_session_quality_reports(session_dir: Path) -> Tuple[Path, List[Path]]:
+def generate_session_quality_reports(session_dir: Path = None, metrics_file: Path = None) -> Tuple[Path, List[Path]]:
     """
-    Generate session quality reports using existing quality reporting system
-
-    This function maintains the same API as generate_quality_reports() but handles
-    session-wide data with multiple configs
+    Generate session quality reports from existing JSON data files
+    
+    This function works independently of the pipeline and reads quality metrics
+    from previously saved JSON files.
+    
+    Args:
+        session_dir: Path to session directory containing quality/ subdirectory
+        metrics_file: Direct path to quality_metrics.json file (alternative to session_dir)
+        
+    Returns:
+        Tuple of (summary_report_path, list_of_individual_report_paths)
+        
+    Raises:
+        FileNotFoundError: If quality metrics JSON file cannot be found
+        ValueError: If neither session_dir nor metrics_file is provided
     """
-    quality_dir = session_dir / "quality"
-    metrics_file = quality_dir / "quality_metrics.json"
-
+    if metrics_file is None:
+        if session_dir is None:
+            raise ValueError("Either session_dir or metrics_file must be provided")
+        
+        quality_dir = session_dir / "quality"
+        metrics_file = quality_dir / "quality_metrics.json"
+    
     if not metrics_file.exists():
         raise FileNotFoundError(f"Session quality metrics not found: {metrics_file}")
 
-    # Use existing QualityReporter but with session-enhanced data
+    logger.info(f"Generating session quality reports from: {metrics_file}")
+    
+    # Use SessionQualityReporter with JSON-based initialization
     reporter = SessionQualityReporter(metrics_file)
     return reporter.generate_all_reports()
 
@@ -28,19 +45,91 @@ class SessionQualityReporter(QualityReporter):
     """
     Extends existing QualityReporter to handle session data
     Reuses all existing plotting and HTML generation components
+    Works independently by reading data from JSON files
     """
 
     def __init__(self, metrics_file: Path):
-        super().__init__(metrics_file)
+        # Initialize basic attributes without calling super().__init__()
+        self.metrics_file = metrics_file
+        self.quality_dir = metrics_file.parent
 
-        # Load session-specific data
+        # Load session-specific data from JSON
         with open(metrics_file, 'r') as f:
             self.session_data = json.load(f)
 
-        self.session_info = self.session_data.get('session_info', {})
+        # Extract core data components
+        self.data = self._reconstruct_data_from_json()
+        self.session_info = self.data['participants'].get('session_info', {})
         self.availability = self.session_data.get('participant_availability', {})
 
-        logger.info(f"Session quality reporter initialized: {self.session_info.get('session_name', 'Unknown')}")
+        # Initialize components that don't depend on pipeline state
+        from .quality_metrics_analyzer import QualityMetricsAnalyzer
+        from .quality_plot_generator import QualityPlotGenerator  
+        from .quality_html_generator import QualityHTMLGenerator
+
+        # Create cleaned data for analyzer (without session_info in participants)
+        analyzer_data = {
+            'dataset_info': self.data.get('dataset_info', {}),
+            'participants': {k: v for k, v in self.data['participants'].items() if k != 'session_info'}
+        }
+        
+        self.analyzer = QualityMetricsAnalyzer(analyzer_data, self.quality_dir)
+        self.plotter = QualityPlotGenerator(self.quality_dir)
+        self.html_generator = QualityHTMLGenerator()
+
+        logger.info(f"Session quality reporter initialized from JSON: {self.session_info.get('session_name', 'Unknown')}")
+
+    def _reconstruct_data_from_json(self) -> Dict:
+        """Reconstruct the data structure expected by QualityReporter from JSON"""
+        reconstructed_data = {
+            'dataset_info': self.session_data.get('dataset_info', {}),
+            'participants': {}
+        }
+
+        # Process each participant from the JSON structure
+        for participant_id, participant_data in self.session_data.get('participants', {}).items():
+            if participant_id == 'session_info':
+                # Keep session_info in participants dict as expected by SessionQualityReporter
+                reconstructed_data['participants']['session_info'] = participant_data
+                continue
+
+            # Convert participant data to expected format
+            reconstructed_data['participants'][participant_id] = {
+                'conditions': {}
+            }
+
+            conditions_data = participant_data.get('conditions', {})
+            for condition_name, condition_data in conditions_data.items():
+                reconstructed_data['participants'][participant_id]['conditions'][condition_name] = {
+                    'completion': self._extract_completion_info(condition_data),
+                    'stages': condition_data.get('stages', {}),
+                    'config_name': condition_data.get('config_name', 'unknown')
+                }
+
+        return reconstructed_data
+
+    def _extract_completion_info(self, condition_data: Dict) -> Dict:
+        """Extract completion status from condition data"""
+        stages = condition_data.get('stages', {})
+        
+        # Check if all stages completed successfully
+        all_completed = True
+        errors = []
+        
+        for stage_name, stage_data in stages.items():
+            stage_metrics = stage_data.get('metrics', {})
+            if not stage_metrics.get('stage_completed', False):
+                all_completed = False
+                error_msg = stage_metrics.get('error', f'Stage {stage_name} failed')
+                errors.append(error_msg)
+
+        return {
+            'success': all_completed,
+            'status': 'completed' if all_completed else 'failed',
+            'error': '; '.join(errors) if errors else None,
+            'total_stages': len(stages),
+            'completed_stages': sum(1 for s in stages.values() if s.get('metrics', {}).get('stage_completed', False))
+        }
 
     def generate_all_reports(self) -> Tuple[Path, List[Path]]:
         """Generate session reports - overrides parent method"""
