@@ -1,5 +1,5 @@
 import click
-from src.eeg_processor.pipeline import EEGPipeline
+from .pipeline import EEGPipeline
 
 
 @click.group()
