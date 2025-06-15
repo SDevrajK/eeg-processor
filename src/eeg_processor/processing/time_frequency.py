@@ -78,19 +78,16 @@ def compute_epochs_tfr_average(epochs: Epochs,
     if baseline is not None:
         logger.info(f"Applying baseline correction: {baseline}, mode: {baseline_mode}")
         power.apply_baseline(baseline, mode=baseline_mode)
-        if compute_itc and itc is not None:
-            # Note: ITC typically doesn't need baseline correction
-            pass
+
+
+    logger.success(f"TFR analysis complete: {len(freqs)} frequencies, {power.data.shape[-1]} time points")
 
     # Store ITC in power object metadata if computed
     if compute_itc and itc is not None:
-        # Store ITC data in the power object's metadata
         power.comment = f"ITC computed: {method} method"
-        # Note: MNE doesn't have a standard way to store ITC with power
-        # You might want to return both objects or save them separately
-        logger.info("ITC computed and stored")
+        power._itc_data = itc        # Store ITC as an attribute on the power object
+        logger.info("ITC data stored with power object")
 
-    logger.success(f"TFR analysis complete: {len(freqs)} frequencies, {power.data.shape[-1]} time points")
     return power
 
 

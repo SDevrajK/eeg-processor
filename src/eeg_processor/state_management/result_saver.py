@@ -123,11 +123,27 @@ class ResultSaver:
         self.logger.info(f"Saved spectrum to {spectrum_path}")
 
     def _save_average_tfr(self, tfr: AverageTFR, participant_id: str, condition_name: str, overwrite: bool):
-        """Save AverageTFR object"""
-        tfr_filename = self._get_filename(participant_id, condition_name, "evoked_", "h5")
+        """Save AverageTFR object, extracting ITC if present"""
+
+        # Check for ITC data and extract it
+        itc_data = None
+        if hasattr(tfr, '_itc_data'):
+            itc_data = tfr._itc_data
+            # Remove ITC from the power object before saving
+            delattr(tfr, '_itc_data')
+
+        # Save the power TFR
+        tfr_filename = self._get_filename(participant_id, condition_name, "tfr", "h5")
         tfr_path = self.output_root / 'processed' / tfr_filename
         tfr.save(tfr_path, overwrite=overwrite)
         self.logger.info(f"Saved AverageTFR to {tfr_path}")
+
+        # Save ITC separately if it exists
+        if itc_data is not None:
+            itc_filename = self._get_filename(participant_id, condition_name, "itc", "h5")
+            itc_path = self.output_root / 'processed' / itc_filename
+            itc_data.save(itc_path, overwrite=overwrite)
+            self.logger.info(f"Saved ITC to {itc_path}")
 
     def _save_epochs_tfr(self, epochs_tfr: EpochsTFR, participant_id: str, condition_name: str, overwrite: bool):
         """Save EpochsTFR object"""

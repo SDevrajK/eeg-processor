@@ -1,7 +1,7 @@
 
 # Paths (relative to tests)
 paths:
-  raw_data: "../test_data/brainvision/"  # Single test file
+  raw_data_dir: "../test_data/brainvision/"  # Single test file
   results_dir: "../test_results/"
   participants: ["GINMMN_07.vhdr"]  # Optional - when omitted, loads all *.vhdr files
 
@@ -42,3 +42,4 @@ stages:
       baseline: [-0.2, 0]
       reject:
         eeg: 250e-6
+  - time_frequency:

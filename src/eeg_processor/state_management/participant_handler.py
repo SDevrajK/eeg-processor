@@ -7,10 +7,14 @@ from loguru import logger
 @dataclass
 class Participant:
     id: str
-    file_path: Path  # This will now store the FULL resolved path
+    file_path: Path
     conditions: List[str] = None
     current_condition: Optional[str] = None
+    metadata: Dict = None
 
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
 
 class ParticipantHandler:
     def __init__(self, config):
@@ -152,3 +156,82 @@ class ParticipantHandler:
             'base_directory': str(self.config.raw_data_dir),
             'missing_files': self.validate_participant_files()
         }
+
+    def add_metadata(self, csv_path: str, participant_id_column: str = "participant_id",
+                     data_types: Optional[Dict[str, str]] = None):
+        """
+        Add metadata to participants from CSV file.
+
+        Args:
+            csv_path: Path to CSV file containing metadata
+            participant_id_column: Column name containing participant IDs
+            data_types: Optional dict mapping column names to data types
+                       (e.g., {'age': 'int', 'score': 'float'})
+
+        Raises:
+            ValueError: If participant IDs don't match exactly
+            FileNotFoundError: If CSV file doesn't exist
+        """
+        import pandas as pd
+
+        csv_path = Path(csv_path)
+        if not csv_path.exists():
+            raise FileNotFoundError(f"Metadata CSV not found: {csv_path}")
+
+        # Load CSV
+        try:
+            metadata_df = pd.read_csv(csv_path)
+        except Exception as e:
+            raise ValueError(f"Failed to read CSV {csv_path}: {e}")
+
+        # Validate participant_id column exists
+        if participant_id_column not in metadata_df.columns:
+            raise ValueError(f"Column '{participant_id_column}' not found in {csv_path}. "
+                             f"Available columns: {list(metadata_df.columns)}")
+
+        # Get participant IDs from both sources
+        config_ids = set(self.get_participant_ids())
+        csv_ids = set(metadata_df[participant_id_column].astype(str))  # Ensure string comparison
+
+        # Exact match validation - FATAL ERRORS
+        missing_in_csv = config_ids - csv_ids
+        missing_in_config = csv_ids - config_ids
+
+        if missing_in_csv:
+            raise ValueError(f"Participants in config but missing from CSV {csv_path}: {missing_in_csv}")
+        if missing_in_config:
+            raise ValueError(f"Participants in CSV {csv_path} but missing from config: {missing_in_config}")
+
+        # Apply data type conversions if specified
+        if data_types:
+            for column, dtype in data_types.items():
+                if column in metadata_df.columns and column != participant_id_column:
+                    try:
+                        if dtype == 'int':
+                            metadata_df[column] = pd.to_numeric(metadata_df[column], errors='coerce').astype('Int64')
+                        elif dtype == 'float':
+                            metadata_df[column] = pd.to_numeric(metadata_df[column], errors='coerce')
+                        elif dtype == 'bool':
+                            metadata_df[column] = metadata_df[column].astype(bool)
+                        # 'str' or any other type - leave as is
+                    except Exception as e:
+                        logger.warning(f"Failed to convert column '{column}' to {dtype}: {e}")
+
+        # Add metadata to participant objects
+        added_columns = []
+        for _, row in metadata_df.iterrows():
+            participant_id = str(row[participant_id_column])
+            participant = self.get_participant_by_id(participant_id)
+
+            # Add all columns except the ID column as metadata
+            for column, value in row.items():
+                if column != participant_id_column:
+                    # Handle NaN values from pandas
+                    if pd.isna(value):
+                        value = None
+                    participant.metadata[column] = value
+                    if column not in added_columns:
+                        added_columns.append(column)
+
+        logger.info(f"Added metadata from {csv_path}: {added_columns} for {len(config_ids)} participants")
+        return self
