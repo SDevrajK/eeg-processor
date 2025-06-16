@@ -1,4 +1,3 @@
-# At the very top of pipeline.py, before other imports
 import pathlib
 import unicodedata
 
@@ -15,7 +14,7 @@ pathlib.Path.__new__ = _normalized_path_new
 
 from pathlib import Path
 from loguru import logger
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any, Tuple
 import numpy as np
 import gc
 from mne.io import BaseRaw
@@ -32,45 +31,45 @@ from .file_io import load_raw
 from .utils.memory_tools import get_memory_pressure, get_memory_metrics
 
 class EEGPipeline:
-    def __init__(self, config_path: str = None):
-        self.config = None
-        self.processor = DataProcessor()
-        self.participant_handler = None
-        self.result_saver = None
-        self._current_raw = None
-        self._current_epochs = None
-        self._current_evoked = None
-        self.quality_tracker = None
+    def __init__(self, config_path: Optional[Union[str, Dict[str, Any]]] = None) -> None:
+        self.config: Optional[Any] = None
+        self.processor: DataProcessor = DataProcessor()
+        self.participant_handler: Optional[ParticipantHandler] = None
+        self.result_saver: Optional[ResultSaver] = None
+        self._current_raw: Optional[BaseRaw] = None
+        self._current_epochs: Optional[Epochs] = None
+        self._current_evoked: Optional[Evoked] = None
+        self.quality_tracker: Optional[QualityTracker] = None
 
         if config_path:
             self.load_config(config_path)
 
-    def load_config(self, config_path: str):
+    def load_config(self, config_path: Union[str, Dict[str, Any]]) -> None:
         """Load configuration and setup pipeline components"""
         self.config = load_config(config_path)
         self.participant_handler = ParticipantHandler(self.config)
-        self.result_saver = ResultSaver(self.config.results_dir)
+        self.result_saver = ResultSaver(self.config.processed_dir)
 
         # Initialize quality tracker
-        self.quality_tracker = QualityTracker(self.config.results_dir)
+        self.quality_tracker = QualityTracker(self.config.processed_dir)
 
         # Log configuration details
         if self.config.dataset_name:
             logger.info(f"Configuration loaded: {len(self.config.participants)} participants for dataset '{self.config.dataset_name}'")
-            logger.info(f"Results will be saved to: {self.config.results_dir}")
+            logger.info(f"Results will be saved to: {self.config.processed_dir}")
         else:
             logger.info(f"Configuration loaded: {len(self.config.participants)} participants")
         
         return self
 
-    def get_analysis_interface(self):
-        from .utils.analysis_interface import AnalysisInterface
+    def get_analysis_interface(self) -> Any:
         """Return minimal interface for loading processed data"""
+        from .utils.analysis_interface import AnalysisInterface
         if not self.config:
             raise ValueError("Configuration not loaded. Call load_config() first.")
-        return AnalysisInterface(self.config, self.config.results_dir)
+        return AnalysisInterface(self.config, self.config.processed_dir)
 
-    def set_quality_tracker(self, quality_tracker):
+    def set_quality_tracker(self, quality_tracker: QualityTracker) -> None:
         """Allow external quality tracker injection for session-based processing"""
         self.quality_tracker = quality_tracker
         logger.debug("External quality tracker injected for session processing")
@@ -319,7 +318,7 @@ class EEGPipeline:
             from .quality_control.quality_reporter import generate_quality_reports
 
             # Generate reports from the saved metrics
-            summary_path, participant_paths = generate_quality_reports(self.config.results_dir)
+            summary_path, participant_paths = generate_quality_reports(self.config.reports_dir or self.config.processed_dir)
 
             logger.success(f"Quality reports generated:")
             logger.success(f"  Summary report: {summary_path}")
