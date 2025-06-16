@@ -41,14 +41,30 @@ class ParticipantHandler:
         participants_data = self.config.participants
 
         if isinstance(participants_data, dict):
-            # New dictionary format: {participant_id: filename}
-            for participant_id, filename in participants_data.items():
+            # New dictionary format: {participant_id: filename or {file: filename, ...}}
+            for participant_id, participant_info in participants_data.items():
+                # Handle both simple and detailed formats
+                if isinstance(participant_info, str):
+                    # Simple format: participant_id: "filename.ext"
+                    filename = participant_info
+                    metadata = {}
+                elif isinstance(participant_info, dict):
+                    # Detailed format: participant_id: {file: "filename.ext", age: 25, ...}
+                    filename = participant_info.get('file')
+                    if not filename:
+                        raise ValueError(f"Participant '{participant_id}' missing required 'file' property")
+                    # Extract metadata (everything except 'file')
+                    metadata = {k: v for k, v in participant_info.items() if k != 'file'}
+                else:
+                    raise ValueError(f"Participant '{participant_id}' must be either a filename string or dictionary with metadata")
+                
                 file_path = self._resolve_participant_file(raw_data_path, filename)
                 participants.append(
                     Participant(
                         id=participant_id,
                         file_path=file_path,
-                        conditions=[cond['name'] for cond in self.config.conditions]
+                        conditions=[cond['name'] for cond in self.config.conditions],
+                        metadata=metadata
                     )
                 )
 
@@ -85,12 +101,13 @@ class ParticipantHandler:
 
         # Case-insensitive file search
         if not file_path.exists():
-            file_path = self._find_matching_file(raw_data_path, file_path.name)
-            if not file_path:
+            found_file = self._find_matching_file(raw_data_path, file_path.name)
+            if not found_file:
                 raise FileNotFoundError(
                     f"Participant file not found in {raw_data_path}. "
-                    f"Tried: {file_spec}"
+                    f"Tried: {file_path} (from spec: {file_spec})"
                 )
+            file_path = found_file
 
         return file_path
 

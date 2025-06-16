@@ -1,107 +1,213 @@
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 import yaml
+from .exceptions import ConfigurationError, ValidationError
 from ..state_management.participant_handler import Participant
 
 @dataclass
 class PipelineConfig:
     raw_data_dir: Path
-    interim_dir: Path
-    results_dir: Path
+    processed_dir: Path
     figures_dir: Path
+    reports_dir: Path
     file_extension: str
-    participants: Union[Dict[str, str], List[str]]  # Raw participants data
-    stages: List[Union[str, Dict]]
-    conditions: List[Dict]
-    dataset_name: Optional[str] = None  # Optional dataset name for organizing results
+    participants: Union[Dict[str, str], Dict[str, Dict[str, Any]]]  # Support both simple and detailed participant formats
+    stages: List[Dict[str, Any]]  # Processing pipeline steps
+    conditions: List[Dict[str, Any]]
+    study_info: Dict[str, Any]
+    output_config: Dict[str, Any]
+    dataset_name: Optional[str] = None
 
 
-def load_config(config_path: str) -> PipelineConfig:
-    """Load and validate YAML config file."""
-    config_path = Path(config_path).resolve()
-    with open(config_path, 'r', encoding='utf-8') as f:
-        raw_config = yaml.safe_load(f)
-
-    return validate_config(raw_config, config_path.parent)
+def load_config(config_path: Union[str, Dict[str, Any]], override_params: Optional[Dict[str, Any]] = None) -> PipelineConfig:
+    """Load and validate configuration from file or dictionary.
+    
+    Args:
+        config_path: Path to YAML config file or config dictionary
+        override_params: Optional parameters to override in config
+        
+    Returns:
+        Validated PipelineConfig object
+        
+    Raises:
+        ConfigurationError: If config file cannot be loaded or parsed
+        ValidationError: If config validation fails
+    """
+    try:
+        if isinstance(config_path, dict):
+            raw_config = config_path.copy()
+            config_base = Path.cwd()
+        else:
+            config_path = Path(config_path).resolve()
+            if not config_path.exists():
+                raise ConfigurationError(f"Configuration file not found: {config_path}")
+            
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    raw_config = yaml.safe_load(f)
+            except yaml.YAMLError as e:
+                raise ConfigurationError(f"Invalid YAML syntax in {config_path}: {e}")
+            except UnicodeDecodeError as e:
+                raise ConfigurationError(f"Unable to decode config file {config_path}: {e}")
+            
+            config_base = config_path.parent
+        
+        # Apply overrides if provided
+        if override_params:
+            raw_config = _deep_merge_config(raw_config, override_params)
+            
+        return validate_config(raw_config, config_base)
+        
+    except (ConfigurationError, ValidationError):
+        raise
+    except Exception as e:
+        raise ConfigurationError(f"Unexpected error loading config: {e}")
 
 
 def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
-    """Validate and convert raw config dict to PipelineConfig."""
+    """Validate and convert raw config dict to PipelineConfig.
+    
+    Args:
+        raw_config: Raw configuration dictionary
+        config_base: Base directory for resolving relative paths
+        
+    Returns:
+        Validated PipelineConfig object
+        
+    Raises:
+        ValidationError: If configuration validation fails
+    """
+    if not isinstance(raw_config, dict):
+        raise ValidationError("Configuration must be a dictionary")
+    
+    # Validate required top-level keys for new structure
+    required_keys = ['study', 'participants', 'paths', 'processing']
+    missing_keys = [key for key in required_keys if key not in raw_config]
+    if missing_keys:
+        raise ValidationError(f"Missing required configuration keys: {missing_keys}")
+    
     paths = raw_config.get('paths', {})
+    if not isinstance(paths, dict):
+        raise ValidationError("'paths' must be a dictionary")
+
+    # Validate required path keys
+    required_path_keys = ['raw_data', 'processed']
+    missing_path_keys = [key for key in required_path_keys if key not in paths]
+    if missing_path_keys:
+        raise ValidationError(f"Missing required path keys: {missing_path_keys}")
 
     # Convert paths to absolute
-    abs_paths = {
-        k: (config_base / v).resolve() if isinstance(v, str) else v
-        for k, v in paths.items()
-        if k != 'participants'  # Handle participants separately
-    }
+    try:
+        abs_paths = {
+            k: (config_base / v).resolve() if isinstance(v, str) else v
+            for k, v in paths.items()
+        }
+    except Exception as e:
+        raise ValidationError(f"Error resolving paths: {e}")
 
-    # Handle participants - pass raw data to ParticipantHandler for processing
-    participants_data = None
+    # Get raw data directory
+    raw_data_dir = abs_paths.get('raw_data')
+    if not raw_data_dir.exists():
+        raise ValidationError(f"Raw data directory does not exist: {raw_data_dir}")
 
-    # Get the correct raw data path key
-    raw_data_dir = abs_paths.get('raw_data_dir')
-    if not raw_data_dir:
-        raise ValueError("Config must specify 'raw_data' path")
-
-    if 'participants' in paths:
-        participants_data = paths['participants']
-    else:
-        # Auto-discovery case - return list of filenames for ParticipantHandler
-        ext = paths.get('file_extension', '.vhdr')
-        file_paths = sorted(list(raw_data_dir.glob(f"*{ext}")) +
-                            list(raw_data_dir.glob(f"**/*{ext}")))
-        participants_data = [fp.name for fp in file_paths]  # Just pass filenames
-
-    if not participants_data:
-        raise ValueError("No participants found. Check participants specification or raw_data path.")
-
-    # Handle dataset_name for result organization
-    dataset_name = raw_config.get('dataset_name', None)
+    # Validate participants structure - support both simple and detailed formats
+    participants_data = raw_config.get('participants', {})
+    if not isinstance(participants_data, dict) or not participants_data:
+        raise ValidationError("'participants' must be a non-empty dictionary")
     
-    # Adjust result paths if dataset_name is provided
-    base_results_dir = abs_paths.get('results_dir')
-    if dataset_name and base_results_dir:
-        # Create dataset-specific subdirectory
-        dataset_results_dir = base_results_dir / dataset_name
-        dataset_interim_dir = dataset_results_dir / "interim" if not abs_paths.get('interim_dir') else abs_paths.get('interim_dir')
-        dataset_figures_dir = dataset_results_dir / "figures" if not abs_paths.get('figures_dir') else abs_paths.get('figures_dir')
-        
-        # Use dataset-specific paths
-        final_results_dir = dataset_results_dir
-        final_interim_dir = dataset_interim_dir
-        final_figures_dir = dataset_figures_dir
-    else:
-        # Use original paths
-        final_results_dir = base_results_dir
-        final_interim_dir = abs_paths.get('interim_dir')
-        final_figures_dir = abs_paths.get('figures_dir')
+    # Validate each participant entry - handle both formats
+    for participant_id, participant_info in participants_data.items():
+        if isinstance(participant_info, str):
+            # Simple format: participant_id: "filename.ext"
+            continue
+        elif isinstance(participant_info, dict):
+            # Detailed format: participant_id: {file: "filename.ext", age: 25, ...}
+            if 'file' not in participant_info:
+                raise ValidationError(f"Participant '{participant_id}' missing required 'file' property")
+        else:
+            raise ValidationError(f"Participant '{participant_id}' must be either a filename string or dictionary with metadata")
 
-    # Validate conditions if present
+    # Extract study information and dataset name
+    study_info = raw_config.get('study', {})
+    if not isinstance(study_info, dict):
+        raise ValidationError("'study' must be a dictionary")
+    
+    dataset_name = study_info.get('dataset')
+    
+    # Get final paths
+    processed_dir = abs_paths.get('processed')
+    figures_dir = abs_paths.get('figures', processed_dir / 'figures' if processed_dir else None)
+    reports_dir = abs_paths.get('reports', processed_dir / 'reports' if processed_dir else None)
+
+    # Validate conditions
     conditions = raw_config.get('conditions', [])
-    for cond in conditions:
-        if not all(k in cond for k in ('name',)):  # Only name is required
-            raise ValueError(f"Condition {cond.get('name', 'unnamed')} missing required 'name' key")
+    if not isinstance(conditions, list):
+        raise ValidationError("'conditions' must be a list")
+    
+    for i, cond in enumerate(conditions):
+        if not isinstance(cond, dict):
+            raise ValidationError(f"Condition {i} must be a dictionary")
+        
+        if 'name' not in cond:
+            raise ValidationError(f"Condition {i} missing required 'name' key")
+        
+        # Validate triggers structure if present
+        if 'triggers' in cond:
+            triggers = cond['triggers']
+            if not isinstance(triggers, dict):
+                raise ValidationError(f"Condition '{cond['name']}': triggers must be a dictionary")
+        
+        # Validate markers if present
+        if 'markers' in cond:
+            markers = cond['markers']
+            if not isinstance(markers, list):
+                raise ValidationError(f"Condition '{cond['name']}': markers must be a list")
 
-        # Validate condition markers if present
-        if 'condition_markers' in cond:
-            markers = cond['condition_markers']
-            if not isinstance(markers, list) or len(markers) != 2:
-                raise ValueError(
-                    f"Condition {cond['name']}: condition_markers must be a list of 2 elements [start, end]")
+    # Validate processing pipeline
+    processing_stages = raw_config.get('processing', [])
+    if not isinstance(processing_stages, list):
+        raise ValidationError("'processing' must be a list")
+    
+    # Validate output configuration
+    output_config = raw_config.get('output', {})
+    if not isinstance(output_config, dict):
+        raise ValidationError("'output' must be a dictionary")
 
     return PipelineConfig(
         raw_data_dir=raw_data_dir,
-        interim_dir=final_interim_dir,
-        results_dir=final_results_dir,
-        figures_dir=final_figures_dir,
+        processed_dir=processed_dir,
+        figures_dir=figures_dir,
+        reports_dir=reports_dir,
         file_extension=paths.get('file_extension', '.vhdr'),
         participants=participants_data,
-        stages=raw_config.get('stages', []),
+        stages=processing_stages,
         conditions=conditions,
+        study_info=study_info,
+        output_config=output_config,
         dataset_name=dataset_name
     )
+
+
+def _deep_merge_config(base_config: Dict[str, Any], override_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep merge two configuration dictionaries.
+    
+    Args:
+        base_config: Base configuration dictionary
+        override_config: Override configuration dictionary
+        
+    Returns:
+        Merged configuration dictionary
+    """
+    result = base_config.copy()
+    
+    for key, value in override_config.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge_config(result[key], value)
+        else:
+            result[key] = value
+    
+    return result
 
 
 def get_participant_by_id(config: PipelineConfig, participant_id: str) -> Optional[Participant]:
@@ -110,46 +216,3 @@ def get_participant_by_id(config: PipelineConfig, participant_id: str) -> Option
         if participant.id == participant_id:
             return participant
     return None
-
-
-def get_participant_ids_union(config_paths: List[str]) -> List[str]:
-    """
-    Get union of all participant IDs across multiple configs
-    Useful for session-based processing
-    """
-    from ..state_management.participant_handler import ParticipantHandler
-
-    all_participant_ids = set()
-
-    for config_path in config_paths:
-        config = load_config(config_path)
-        # Create temporary participant handler to get IDs
-        temp_handler = ParticipantHandler(config)
-        all_participant_ids.update(temp_handler.get_participant_ids())
-
-    return sorted(list(all_participant_ids))
-
-
-def validate_session_configs(config_paths: List[str]) -> Dict[str, Dict[str, str]]:
-    """
-    Validate and return participant mapping across multiple configs
-    Returns: {participant_id: {config_name: filename}}
-    """
-    from ..state_management.participant_handler import ParticipantHandler
-
-    participant_mapping = {}
-
-    for config_path in config_paths:
-        config_path_obj = Path(config_path)
-        config_name = config_path_obj.stem.replace("_processing_params", "").replace("RIEEG_", "")
-        config = load_config(config_path)
-
-        # Create temporary participant handler to resolve participants
-        temp_handler = ParticipantHandler(config)
-
-        for participant in temp_handler.participants:
-            if participant.id not in participant_mapping:
-                participant_mapping[participant.id] = {}
-            participant_mapping[participant.id][config_name] = participant.file_path.name
-
-    return participant_mapping
