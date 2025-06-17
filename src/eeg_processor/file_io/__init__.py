@@ -3,7 +3,7 @@ from mne.io import BaseRaw
 from .brainvision import BrainVisionLoader
 from .curry import CurryLoader
 from .neuroscan import NeuroscanLoader
-from .fif import FifLoader
+from .fif import FIFLoader
 from .bdf import BDFLoader
 from .eeglab import EEGLABLoader
 from .edf import EDFLoader
@@ -34,7 +34,7 @@ def load_raw(file_path: str | Path, **kwargs) -> BaseRaw:
     # Order matters - more specific loaders first
     loaders = [
         BrainVisionLoader,  # .vhdr
-        FifLoader,          # .fif, .fiff
+        FIFLoader,          # .fif, .fiff
         BDFLoader,          # .bdf (Biosemi)
         EEGLABLoader,       # .set (EEGLAB)
         EDFLoader,          # .edf (European Data Format)
@@ -52,6 +52,7 @@ def load_raw(file_path: str | Path, **kwargs) -> BaseRaw:
     raise ValueError(f"Unsupported format: {path.suffix}",
                     f"Supported formats:\n"
                     f"- BrainVision: .vhdr (requires .eeg/.vmrk)\n"
+                    f"- BrainVision (cropped): .xhdr (requires .dat/.xmrk)\n"
                     f"- FIFF: .fif, .fiff\n"
                     f"- Biosemi: .bdf\n"
                     f"- EEGLAB: .set (with .fdt)\n"

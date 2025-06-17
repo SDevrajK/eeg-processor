@@ -11,22 +11,22 @@ from mne import Epochs
 class QualityTracker:
     """Tracks quality metrics during pipeline processing with intelligent stage detection"""
 
-    def __init__(self, results_dir: Path):
-        self.results_dir = Path(results_dir)
-        self.metrics = {}
-        self.start_time = datetime.now()
+    def __init__(self, results_dir: Union[str, Path]) -> None:
+        self.results_dir: Path = Path(results_dir)
+        self.metrics: Dict[str, Any] = {}
+        self.start_time: datetime = datetime.now()
 
-        self.memory_thresholds = {
+        self.memory_thresholds: Dict[str, int] = {
             'warning': 70,  # 70% system memory used
             'critical': 85,  # 85% system memory used
             'abort': 95  # 95% system memory used (stop processing)
         }
 
         # Ensure quality directory exists
-        self.quality_dir = self.results_dir / "quality"
+        self.quality_dir: Path = self.results_dir / "quality"
         self.quality_dir.mkdir(exist_ok=True)
 
-    def track_participant_start(self, participant_id: str):
+    def track_participant_start(self, participant_id: str) -> None:
         """Initialize tracking for a participant"""
         if participant_id not in self.metrics:
             self.metrics[participant_id] = {

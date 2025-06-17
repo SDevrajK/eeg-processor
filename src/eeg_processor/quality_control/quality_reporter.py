@@ -1,214 +1,367 @@
+"""
+Quality Reporter
+
+Main orchestrator for the EEG quality reporting system.
+Automatically detects pipeline stages and generates relevant, research-focused reports.
+"""
+
 from pathlib import Path
 from typing import Dict, List, Tuple
 from loguru import logger
 
-from .quality_metrics_analyzer import QualityMetricsAnalyzer
+from .pipeline_detector import PipelineDetector
+from .quality_flagging import QualityFlagger
 from .quality_plot_generator import QualityPlotGenerator
 from .quality_html_generator import QualityHTMLGenerator
 
 
 class QualityReporter:
     """
-    Main orchestrator for quality report generation.
-
-    Coordinates between data analysis, plot generation, and HTML creation
-    to produce comprehensive quality reports. Much smaller and focused
-    after refactoring into specialized components.
+    Main adaptive quality reporter that:
+    1. Detects which processing stages were used
+    2. Flags participants based on actual data quality issues
+    3. Generates only relevant plots and sections
+    4. Creates clean, research-focused HTML reports
+    
+    Maintains the same API as the original QualityReporter for seamless integration.
     """
-
+    
     def __init__(self, metrics_file: Path):
         """
         Initialize quality reporter with metrics file.
-
+        
         Args:
             metrics_file: Path to the quality metrics JSON file
         """
         self.metrics_file = Path(metrics_file)
         self.quality_dir = self.metrics_file.parent
-
-        # Initialize specialized components
-        self.analyzer = QualityMetricsAnalyzer(metrics_file)
-        self.plotter = QualityPlotGenerator(thresholds=self.analyzer.thresholds)
-        self.html_generator = QualityHTMLGenerator()
-
-        logger.info("QualityReporter initialized with refactored components")
-
+        
+        # Load and analyze the metrics data
+        import json
+        with open(self.metrics_file, 'r') as f:
+            self.data = json.load(f)
+            
+        # Initialize adaptive components
+        self.pipeline_detector = PipelineDetector(self.data['participants'])
+        self.pipeline_info = self.pipeline_detector.pipeline_info
+        
+        # Get quality thresholds based on detected pipeline
+        self.quality_thresholds = self.pipeline_detector.get_quality_thresholds()
+        
+        # Initialize quality flagger
+        self.quality_flagger = QualityFlagger(self.pipeline_info, self.quality_thresholds)
+        
+        # Initialize plot generator
+        self.plot_generator = QualityPlotGenerator(self.pipeline_info, self.quality_thresholds)
+        
+        # Initialize HTML generator
+        self.html_generator = QualityHTMLGenerator(self.pipeline_info)
+        
+        logger.info(f"QualityReporter initialized for {self.pipeline_info['data_type']} "
+                   f"pipeline with {len(self.pipeline_info['stages_used'])} stages")
+    
     def generate_all_reports(self) -> Tuple[Path, List[Path]]:
         """
-        Generate both summary and individual participant reports.
-
-        This is the main public API method that preserves exact same usage
-        as the original QualityReporter.
-
+        Generate quality reports.
+        
+        Returns all quality reports including summary and individual participant reports.
+        
         Returns:
             Tuple of (summary_report_path, list_of_participant_report_paths)
         """
-        logger.info("Generating enhanced quality reports...")
-
-        # Step 1: Analyze all data and compute statistics
-        stats = self.analyzer.compute_all_statistics()
-
-        # Step 2: Generate summary report
-        summary_path = self._generate_summary_report(stats)
-
-        # Step 3: Generate individual participant reports
-        participant_paths = self._generate_participant_reports(stats)
-
-        logger.success(f"Enhanced reports generated: summary + {len(participant_paths)} individual reports")
+        logger.info("Generating quality reports...")
+        
+        # Step 1: Flag all participants based on data quality
+        flagged_participants = self.quality_flagger.flag_all_participants(self.data['participants'])
+        
+        # Step 2: Compute basic statistics
+        stats = self._compute_basic_statistics()
+        
+        # Step 3: Generate adaptive plots
+        plots = self.plot_generator.generate_adaptive_plots(stats, flagged_participants)
+        
+        # Step 4: Create summary report
+        summary_path = self._generate_summary_report(stats, plots, flagged_participants)
+        
+        # Step 5: Generate simplified individual reports (placeholder for now)
+        participant_paths = self._generate_participant_reports(flagged_participants)
+        
+        logger.success(f"Quality reports generated: summary + {len(participant_paths)} individual reports")
+        logger.info(f"Quality summary: {len(flagged_participants['critical'])} critical, "
+                   f"{len(flagged_participants['warning'])} warning, "
+                   f"{len(flagged_participants['good'])} good")
+        
         return summary_path, participant_paths
-
-    def _generate_summary_report(self, stats: Dict) -> Path:
-        """Generate comprehensive dataset overview HTML report"""
+    
+    def _compute_basic_statistics(self) -> Dict:
+        """Compute basic statistics needed for reporting."""
+        participants = self.data['participants']
+        dataset_info = self.data['dataset_info']
+        
+        # Basic completion statistics
+        total_participants = len(participants)
+        completed_participants = sum(1 for p in participants.values() if p['completed'])
+        
+        return {
+            'dataset_info': dataset_info,
+            'participants': participants,
+            'completion_stats': {
+                'total_participants': total_participants,
+                'completed_participants': completed_participants,
+                'completion_rate': (completed_participants / total_participants * 100) if total_participants > 0 else 0
+            }
+        }
+    
+    def _generate_summary_report(self, stats: Dict, plots: Dict[str, str], 
+                               flagged_participants: Dict) -> Path:
+        """Generate the main summary report."""
         logger.info("Creating summary report...")
-
+        
         output_path = self.quality_dir / "quality_summary_report.html"
-
-        # Generate all plots for summary report
-        summary_plots = self.plotter.generate_summary_plots(stats)
-
-        # Create HTML report
+        
         return self.html_generator.create_summary_report(
             output_path=output_path,
             stats=stats,
-            plots=summary_plots
+            plots=plots,
+            flagged_participants=flagged_participants
         )
-
-    def _generate_participant_reports(self, stats: Dict) -> List[Path]:
-        """Generate enhanced individual participant reports"""
-        logger.info("Creating individual participant reports...")
-
-        participants = stats['participants']
+    
+    def _generate_participant_reports(self, flagged_participants: Dict) -> List[Path]:
+        """Generate simplified individual participant reports."""
+        logger.info("Creating simplified individual participant reports...")
+        
         individual_dir = self.quality_dir / "individual_reports"
-
-        # Prepare participant data and generate all plots
-        participants_data = {}
-        participant_plots = {}
-
-        for participant_id in participants.keys():
-            # Get participant-specific data
-            participant_stats = self.analyzer.get_participant_condition_data(participant_id)
-            participants_data[participant_id] = participant_stats
-
-            # Generate participant-specific plots
-            participant_plots[participant_id] = self.plotter.generate_participant_plots(
-                participant_id, participant_stats
-            )
-
-        # Create all HTML reports
-        return self.html_generator.create_participant_reports(
-            individual_dir=individual_dir,
-            participants_data=participants_data,
-            participant_plots=participant_plots
-        )
-
-    # Mock data generation for testing (simplified from original)
-    def generate_mock_report(self, output_dir: Path) -> Path:
-        """
-        Generate a test report with simple hardcoded mock data.
-
-        Args:
-            output_dir: Directory where to save the mock report
-
-        Returns:
-            Path to the generated mock report
-        """
-        from .mock_data import get_simple_mock_data
-
-        output_dir = Path(output_dir)
-        output_dir.mkdir(exist_ok=True)
-
-        # Use simple hardcoded mock data instead of complex randomization
-        mock_data = get_simple_mock_data()
-
-        # Temporarily replace analyzer data for mock generation
-        original_data = self.analyzer.data
-        self.analyzer.data = mock_data
-
-        try:
-            # Generate mock report using same pipeline
-            stats = self.analyzer.compute_all_statistics()
-            summary_plots = self.plotter.generate_summary_plots(stats)
-
-            output_path = output_dir / "mock_quality_summary_report.html"
-            result_path = self.html_generator.create_summary_report(
-                output_path=output_path,
-                stats=stats,
-                plots=summary_plots
-            )
-
-            logger.info(f"Mock quality report generated: {result_path}")
-            return result_path
-
-        finally:
-            # Restore original data
-            self.analyzer.data = original_data
-
-    @classmethod
-    def create_mock_reporter(cls, output_dir: Path):
-        """
-        Class method to create a QualityReporter instance for mock report generation.
-
-        Creates a reporter without requiring real metrics file.
-        """
-        # Create a temporary mock reporter without real metrics file
-        reporter = cls.__new__(cls)  # Create instance without calling __init__
-
-        # Set required attributes
-        reporter.quality_dir = Path(output_dir)
-        reporter.quality_dir.mkdir(exist_ok=True)
-
-        # Initialize components with mock data
-        from .mock_data import get_simple_mock_data
-        mock_data = get_simple_mock_data()
-
-        # Create a temporary mock analyzer
-        reporter.analyzer = QualityMetricsAnalyzer.__new__(QualityMetricsAnalyzer)
-        reporter.analyzer.data = mock_data
-        reporter.analyzer.thresholds = {
-            'bad_channels': {'warning': 4, 'critical': 8},
-            'rejection_rate': {'warning': 15, 'critical': 30},
-            'ica_components': {'warning': 16, 'critical': 24}
+        individual_dir.mkdir(exist_ok=True)
+        
+        report_paths = []
+        
+        # For now, create simple text-based individual reports
+        # This can be enhanced later with full HTML reports if needed
+        for level, participants in flagged_participants.items():
+            for participant_info in participants:
+                participant_id = participant_info['participant_id']
+                output_path = individual_dir / f"{participant_id}_quality_report.html"
+                
+                # Create simple individual report
+                html_content = self._create_simple_participant_report(participant_info)
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                    
+                report_paths.append(output_path)
+        
+        logger.info(f"Created {len(report_paths)} individual participant reports")
+        return report_paths
+    
+    def _create_simple_participant_report(self, participant_info: Dict) -> str:
+        """Create a detailed individual participant report."""
+        participant_id = participant_info['participant_id']
+        flag_level = participant_info['flag_level']
+        reasons = participant_info['reasons']
+        participant_data = participant_info['participant_data']
+        
+        # Get detailed quality information
+        bad_channel_details = self._get_bad_channel_details(participant_data)
+        epoch_rejection_details = self._get_epoch_rejection_details(participant_data)
+        
+        # Color coding based on flag level
+        colors = {
+            'critical': '#dc3545',
+            'warning': '#ffc107', 
+            'good': '#28a745'
         }
-
-        # Initialize other components
-        reporter.plotter = QualityPlotGenerator(thresholds=reporter.analyzer.thresholds)
-        reporter.html_generator = QualityHTMLGenerator()
-
-        return reporter
-
-    # Legacy compatibility methods (if needed)
-    def get_thresholds(self) -> Dict:
-        """Get quality thresholds used by the reporter"""
-        return self.analyzer.thresholds
-
-    def get_data_summary(self) -> Dict:
-        """Get basic summary of loaded data"""
-        return {
-            'total_participants': len(self.analyzer.data['participants']),
-            'dataset_start': self.analyzer.data['dataset_info']['start_time'],
-            'dataset_end': self.analyzer.data['dataset_info']['end_time']
+        
+        status_icons = {
+            'critical': '🚨',
+            'warning': '⚠️',
+            'good': '✅'
         }
+        
+        return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quality Report: {participant_id}</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+               margin: 2rem; line-height: 1.6; color: #333; }}
+        .header {{ background: white; padding: 2rem; border-radius: 8px; 
+                   box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 2rem; }}
+        .status {{ padding: 1rem; border-radius: 8px; margin: 1rem 0; 
+                   background-color: {colors[flag_level]}20; border-left: 4px solid {colors[flag_level]}; }}
+        .back-link {{ margin-bottom: 1rem; }}
+        .back-link a {{ color: #007bff; text-decoration: none; }}
+        .back-link a:hover {{ text-decoration: underline; }}
+        ul {{ margin: 1rem 0; }}
+        li {{ margin: 0.5rem 0; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="back-link">
+            <a href="../quality_summary_report.html">← Back to Summary Report</a>
+        </div>
+        <h1>{status_icons[flag_level]} Quality Report: {participant_id}</h1>
+        
+        <div class="status">
+            <h2>Quality Status: {flag_level.title()}</h2>
+            {self._format_participant_reasons(reasons)}
+        </div>
+        
+        {self._format_detailed_quality_info(bad_channel_details, epoch_rejection_details)}
+        
+        <div style="margin-top: 2rem; padding: 1rem; background-color: #f8f9fa; border-radius: 6px;">
+            <h3>Pipeline Information</h3>
+            <p><strong>Data Type:</strong> {self.pipeline_info['data_type'].title()}</p>
+            <p><strong>Stages Used:</strong> {len(self.pipeline_info['stages_used'])}</p>
+            <p><strong>Key Features:</strong> {', '.join(self.pipeline_detector._get_key_features())}</p>
+        </div>
+    </div>
+</body>
+</html>"""
+    
+    def _format_participant_reasons(self, reasons: List[str]) -> str:
+        """Format the list of quality issues for display."""
+        if not reasons:
+            return "<p>No quality issues detected. Processing completed successfully.</p>"
+        
+        html = "<p>Quality issues identified:</p><ul>"
+        for reason in reasons:
+            html += f"<li>{reason}</li>"
+        html += "</ul>"
+        
+        return html
+    
+    def _get_bad_channel_details(self, participant_data: Dict) -> Dict:
+        """Get detailed bad channel information for individual reports."""
+        for condition_data in participant_data['conditions'].values():
+            stages = condition_data.get('stages', {})
+            if 'detect_bad_channels' in stages:
+                metrics = stages['detect_bad_channels'].get('metrics', {})
+                return {
+                    'bad_channels': metrics.get('detected_bads', []),
+                    'interpolated_channels': metrics.get('interpolation_details', {}).get('successfully_interpolated', []),
+                    'still_bad_channels': metrics.get('interpolation_details', {}).get('still_noisy', []),
+                    'interpolation_successful': metrics.get('interpolation_details', {}).get('success_rate', 0) > 0.8,
+                    'n_detected': metrics.get('n_detected', 0),
+                    'bad_percentage': metrics.get('interpolation_details', {}).get('bad_percentage_before', 0)
+                }
+        return {}
+    
+    def _get_epoch_rejection_details(self, participant_data: Dict) -> Dict:
+        """Get detailed epoch rejection information for individual reports."""
+        for condition_data in participant_data['conditions'].values():
+            stages = condition_data.get('stages', {})
+            if 'epoch' in stages:
+                metrics = stages['epoch'].get('metrics', {})
+                return {
+                    'rejection_rate': metrics.get('rejection_rate', 0),
+                    'rejection_reasons_by_channel': metrics.get('rejection_reasons', {}),
+                    'n_epochs_rejected': metrics.get('rejected_epochs', 0),
+                    'n_epochs_total': metrics.get('total_epochs', 0)
+                }
+        return {}
+    
+    def _format_detailed_quality_info(self, bad_channel_details: Dict, epoch_rejection_details: Dict) -> str:
+        """Format detailed quality information for individual reports."""
+        html = ""
+        
+        # Bad channel details
+        if bad_channel_details and self.pipeline_info['has_bad_channels']:
+            html += '''
+        <div style="margin-top: 2rem; padding: 1rem; background-color: #fff; border-radius: 6px; border-left: 3px solid #007bff;">
+            <h3>Bad Channel Analysis</h3>'''
+            
+            bad_channels = bad_channel_details.get('bad_channels', [])
+            interpolated = bad_channel_details.get('interpolated_channels', [])
+            still_bad = bad_channel_details.get('still_bad_channels', [])
+            
+            if bad_channels:
+                html += f'''
+            <p><strong>Channels detected as bad:</strong> {', '.join(bad_channels)} ({len(bad_channels)} total)</p>
+            <p><strong>Bad channel percentage:</strong> {bad_channel_details.get('bad_percentage', 0):.1f}%</p>'''
+                
+                if interpolated:
+                    html += f'''
+            <p><strong>Successfully interpolated:</strong> {', '.join(interpolated)} ({len(interpolated)} channels)</p>'''
+                
+                if still_bad:
+                    html += f'''
+            <p style="color: #dc3545;"><strong>Still bad after interpolation:</strong> {', '.join(still_bad)} ({len(still_bad)} channels)</p>'''
+                else:
+                    html += f'''
+            <p style="color: #28a745;"><strong>All bad channels successfully interpolated</strong></p>'''
+            else:
+                html += '''
+            <p style="color: #28a745;"><strong>No bad channels detected</strong></p>'''
+            
+            html += '''
+        </div>'''
+        
+        # Epoch rejection details
+        if epoch_rejection_details and self.pipeline_info['has_epoching']:
+            html += '''
+        <div style="margin-top: 2rem; padding: 1rem; background-color: #fff; border-radius: 6px; border-left: 3px solid #28a745;">
+            <h3>Epoch Rejection Analysis</h3>'''
+            
+            rejection_rate = epoch_rejection_details.get('rejection_rate', 0)
+            n_rejected = epoch_rejection_details.get('n_epochs_rejected', 0)
+            n_total = epoch_rejection_details.get('n_epochs_total', 0)
+            rejection_by_channel = epoch_rejection_details.get('rejection_reasons_by_channel', {})
+            
+            html += f'''
+            <p><strong>Rejection rate:</strong> {rejection_rate:.1f}% ({n_rejected}/{n_total} epochs)</p>'''
+            
+            if rejection_by_channel:
+                # Show only channels that caused rejections
+                problematic_channels = {ch: count for ch, count in rejection_by_channel.items() if count > 0}
+                if problematic_channels:
+                    html += '''
+            <p><strong>Channels causing epoch rejections:</strong></p>
+            <ul>'''
+                    for channel, count in sorted(problematic_channels.items(), key=lambda x: x[1], reverse=True):
+                        html += f'''
+                <li>{channel}: {count} epoch rejections</li>'''
+                    html += '''
+            </ul>'''
+                else:
+                    html += '''
+            <p style="color: #28a745;"><strong>No channel-specific epoch rejections</strong></p>'''
+            
+            html += '''
+        </div>'''
+        
+        return html
+    
+    # Utility methods for external access
+    def get_pipeline_info(self) -> Dict:
+        """Get information about the detected pipeline."""
+        return self.pipeline_info
+    
+    def get_quality_summary(self) -> Dict:
+        """Get a summary of quality flags for external use."""
+        flagged_participants = self.quality_flagger.flag_all_participants(self.data['participants'])
+        return self.quality_flagger.get_quality_summary(flagged_participants)
 
 
-# Standalone function to maintain exact same API as original
+# Standalone function for generating quality reports
 def generate_quality_reports(results_dir: Path) -> Tuple[Path, List[Path]]:
     """
-    Generate enhanced quality reports from saved metrics.
-
-    This function maintains the exact same API as the original implementation
-    for backward compatibility.
-
+    Generate quality reports from saved metrics.
+    
+    Main entry point for quality report generation from the pipeline.
+    
     Args:
         results_dir: Results directory containing quality/quality_metrics.json
-
+        
     Returns:
         Tuple of (summary_report_path, list_of_participant_report_paths)
     """
     quality_dir = results_dir / "quality"
     metrics_file = quality_dir / "quality_metrics.json"
-
+    
     if not metrics_file.exists():
         raise FileNotFoundError(f"Quality metrics file not found: {metrics_file}")
-
+    
     reporter = QualityReporter(metrics_file)
     return reporter.generate_all_reports()

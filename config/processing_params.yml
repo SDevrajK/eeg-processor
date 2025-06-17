@@ -1,0 +1,31 @@
+filtering:
+  highpass: 0.1
+  lowpass: 40
+  notch: 50
+
+rereference:
+  method: average
+  exclude: ['Fp1', 'Fp2']
+
+artifact_removal:
+  eog_regression: true
+  eog_channels: ['HEOG', 'VEOG']
+
+output:
+  save_interim: true
+  figure_format: png
+  plot_dir: "figures/"  # Save plots here
+
+artifact:
+  epoch_rejection:
+    method: autoreject  # or 'manual' (your existing threshold-based)
+    consensus: 0.2
+
+stages:
+  - load_data
+  - filter: {type: highpass, freq: 0.1}  # Early highpass
+  - rereference: {method: average}
+  - filter: {type: notch, freq: [50, 100]}  # Notch 50Hz and harmonics
+  - artifact: {method: ica}
+  - filter: {type: lowpass, freq: 30}  # Final lowpass
+  - epoch: {tmin: -0.2, tmax: 0.8}

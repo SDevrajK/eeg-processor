@@ -1,0 +1,74 @@
+# =============================================================================
+# SIMPLE EEG PROCESSING CONFIGURATION TEMPLATE
+# =============================================================================
+
+# Study Information
+study:
+  name: "My_EEG_Study"                    # Required: Your study name
+  dataset: "experiment1"                  # Optional: Dataset identifier
+  description: "EEG data processing"      # Optional: Study description
+  researcher: "Your Lab"                  # Optional: Researcher/lab name
+
+# Participants and Data Files
+participants:
+  # Option 1: Simple format (backward compatible)
+  sub-01: "sub-01.vhdr"
+  sub-02: "sub-02.vhdr"
+
+
+# Experimental Conditions
+conditions:
+  - name: "Rest"
+    description: "Resting state condition"
+    triggers:
+      start: 1
+      end: 2
+    
+  - name: "Task"
+    description: "Active task condition"
+    triggers:
+      start: 10
+      end: 20
+
+# Data Paths (update these to your actual paths)
+paths:
+  raw_data: "data/raw/"                   # Where your EEG files are located
+  results: "results/"                     # Where all outputs will be saved
+  # The system automatically creates subdirectories:
+  # - results/processed/ (processed data files)
+  # - results/figures/ (plots and visualizations)
+  # - results/quality/ (quality control reports)
+  # - results/interim/ (intermediate files)
+
+# Processing Pipeline
+processing:
+  # Basic processing steps - modify as needed
+  - load_data: {}
+  
+  - filter:
+      highpass: 0.1                       # High-pass filter (Hz)
+      lowpass: 40                         # Low-pass filter (Hz)
+      notch: 50                           # Notch filter (Hz) - use 60 for North America
+  
+  - detect_bad_channels:
+      threshold: 2.0                      # Standard deviations for bad channel detection
+      interpolate: true                   # Automatically interpolate bad channels
+  
+  - rereference:
+      method: "average"                   # Re-reference to average of all channels
+  
+  - remove_artifacts:
+      method: "ica"                       # Independent Component Analysis for artifacts
+
+  - create_epochs:
+      time_window: [-0.2, 1.0]           # Time window around events [start, end] in seconds
+      baseline: [-0.2, 0]                # Baseline period for correction
+      rejection:
+        eeg: 100e-6                      # Reject epochs with EEG amplitude > 100 µV
+
+# Output Settings
+output:
+  save_intermediate: true                 # Save intermediate processing steps
+  generate_plots: true                   # Generate quality control plots
+  quality_report: true                   # Generate HTML quality report
+  file_format: "fif"                     # Format for processed data (fif, mat, etc.)

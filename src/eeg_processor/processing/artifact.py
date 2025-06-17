@@ -11,6 +11,14 @@ from mne.preprocessing import ICA
 import matplotlib.pyplot as plt
 import random
 
+# ASR import (try/except for graceful degradation)
+try:
+    import asrpy
+    ASR_AVAILABLE = True
+except ImportError:
+    ASR_AVAILABLE = False
+    asrpy = None
+
 ## Bad Channels ##
 def detect_bad_channels(
         raw: BaseRaw,
@@ -609,4 +617,414 @@ def remove_blinks_with_ica(raw: BaseRaw,
 
     logger.success(f"ICA cleaning completed. Excluded {len(final_excludes)} components.")
     return cleaned_raw
+
+
+## ASR (Artifact Subspace Reconstruction) ##
+def clean_rawdata_asr(
+        raw: BaseRaw,
+        cutoff: Union[int, float] = 20,
+        method: str = "euclid",
+        blocksize: Optional[int] = None,
+        window_length: float = 0.5,
+        window_overlap: float = 0.66,
+        max_dropout_fraction: float = 0.1,
+        min_clean_fraction: float = 0.25,
+        calibration_duration: Optional[float] = None,
+        show_plot: bool = False,
+        plot_duration: float = 10.0,
+        plot_start: float = 5.0,
+        inplace: bool = False,
+        verbose: bool = False
+) -> BaseRaw:
+    """
+    Clean raw EEG data using Artifact Subspace Reconstruction (ASR).
+    
+    ASR is an intermediate data cleaning step designed to be applied after bad channel 
+    detection/interpolation but before ICA. It identifies and corrects brief high-amplitude 
+    artifacts by reconstructing corrupted signal subspaces using a calibration-based approach.
+    
+    **Recommended Pipeline Position:**
+    1. Bad channel detection and interpolation
+    2. ASR data cleaning (this function) ← Intermediate step  
+    3. ICA artifact removal (for remaining component-based artifacts)
+    
+    Args:
+        raw: MNE Raw object to process
+        cutoff: Standard deviation cutoff for artifact detection (default: 20)
+                Higher values = more conservative (less correction)
+                Lower values = more aggressive (more correction)
+                Typical range: 5-100, recommend 10-30 for most applications
+        method: Distance metric for ASR algorithm ('euclid' or 'riemann')
+        blocksize: Block size for processing (samples). If None, auto-determined
+        window_length: Sliding window length in seconds (default: 0.5)
+        window_overlap: Window overlap fraction (default: 0.66, i.e., 66%)
+        max_dropout_fraction: Max fraction of channels to remove per window (default: 0.1)
+        min_clean_fraction: Min fraction of calibration data required (default: 0.25)
+        calibration_duration: Duration of data to use for inline calibration (seconds). 
+                              If None, uses ASRpy defaults (typically 60s or 25% of data)
+        show_plot: Display before/after comparison plot
+        plot_duration: Duration of plot comparison (seconds)
+        plot_start: Start time for plot (seconds)
+        inplace: Ignored (ASR always creates new object)
+        verbose: Show detailed processing information
+        
+    Returns:
+        Raw object with ASR artifact correction applied
+        
+    Notes:
+        **Why ASR as Intermediate Step:**
+        - ASR corrects transient high-amplitude artifacts (motion, electrode pops, etc.)
+        - These artifacts can interfere with ICA decomposition quality
+        - ASR preserves underlying neural signals better than simple rejection
+        - Cleaner data leads to better ICA component separation
+        
+        **Calibration Approach:**
+        - **Automatic inline**: Uses beginning of provided data for calibration
+        - **Custom duration**: Specify calibration_duration for explicit calibration length
+        - ASRpy automatically identifies clean segments within the specified duration
+        
+        **Calibration Requirements:**
+        - Minimum 30 seconds of relatively clean data
+        - Recommended 60+ seconds for optimal performance
+        - Data should be high-pass filtered (≥0.5 Hz) before ASR
+        - At least min_clean_fraction (25%) must be artifact-free
+        
+        **Quality Tracking:**
+        - Stores detailed metrics in raw._asr_metrics for research QC
+        - Includes calibration quality, correlation preservation, variance changes
+        - ASR preserves brain signals while removing transient artifacts
+        
+        **Research Recommendations:**
+        - Apply after bad channel detection/interpolation but before ICA
+        - Use consistent parameters across subjects in a study
+        - Include 1-2 minutes of eyes-closed resting data at recording start
+        - Validate results with correlation analysis (should be >0.8)
+        
+    References:
+        - Mullen et al. (2015). Real-time neuroimaging and cognitive monitoring
+          using wearable dry EEG. IEEE Trans Biomed Eng, 62(11), 2553-2567.
+        - Kothe & Jung (2016). Artifact removal techniques for EEG recordings.
+        - Chang et al. (2020). Evaluation of artifact subspace reconstruction for 
+          automatic artifact removal in single-trial analysis of ERPs. NeuroImage.
+    """
+    if not ASR_AVAILABLE:
+        raise ImportError(
+            "ASRpy is not installed. Please install it with: pip install asrpy"
+        )
+    
+    if inplace:
+        logger.info("inplace=True ignored for ASR - always creates new object")
+    
+    logger.info(f"Starting ASR data cleaning (cutoff={cutoff}, method={method})")
+    
+    # Store original info for comparison
+    original_raw = raw.copy()
+    n_channels = len(raw.ch_names)
+    duration = raw.times[-1]
+    
+    # Validate parameters
+    if cutoff <= 0:
+        raise ValueError("ASR cutoff must be positive")
+    if not 0 < window_overlap < 1:
+        raise ValueError("Window overlap must be between 0 and 1")
+    if not 0 < max_dropout_fraction <= 1:
+        raise ValueError("Max dropout fraction must be between 0 and 1")
+    if not 0 < min_clean_fraction <= 1:
+        raise ValueError("Min clean fraction must be between 0 and 1")
+    
+    # Validate data length for calibration
+    data_duration = raw.times[-1]
+    if calibration_duration is not None:
+        if calibration_duration > data_duration:
+            logger.warning(f"Requested calibration duration ({calibration_duration:.1f}s) "
+                          f"exceeds data length ({data_duration:.1f}s). Using full data length.")
+            calibration_duration = None
+        elif calibration_duration < 30:
+            logger.warning(f"Calibration duration ({calibration_duration:.1f}s) is quite short. "
+                          f"Consider using at least 30 seconds for robust calibration.")
+    
+    if verbose:
+        if calibration_duration is not None:
+            logger.info(f"Using first {calibration_duration:.1f}s of data for ASR calibration")
+        else:
+            logger.info(f"Using ASRpy automatic calibration on {data_duration:.1f}s of data")
+    
+    # Determine block size if not specified
+    if blocksize is None:
+        # Use ASRpy's default behavior or calculate based on data length
+        sfreq = raw.info['sfreq']
+        # Aim for blocks of ~30 seconds or data length, whichever is smaller
+        blocksize = min(int(30 * sfreq), len(raw.times))
+        if verbose:
+            logger.info(f"Auto-determined blocksize: {blocksize} samples ({blocksize/sfreq:.1f}s)")
+    
+    try:
+        # Initialize ASR
+        asr = asrpy.ASR(
+            sfreq=raw.info['sfreq'],
+            cutoff=cutoff,
+            method=method,
+            blocksize=blocksize,
+            win_len=window_length,
+            win_overlap=window_overlap,
+            max_dropout_fraction=max_dropout_fraction,
+            min_clean_fraction=min_clean_fraction
+        )
+        
+        if verbose:
+            logger.info(f"ASR initialized with parameters:")
+            logger.info(f"  Sampling frequency: {raw.info['sfreq']:.1f} Hz")
+            logger.info(f"  Cutoff: {cutoff}")
+            logger.info(f"  Method: {method}")
+            logger.info(f"  Block size: {blocksize} samples")
+            logger.info(f"  Window length: {window_length}s")
+            logger.info(f"  Window overlap: {window_overlap:.1%}")
+        
+        # Apply ASR with optional calibration duration
+        logger.info("Applying ASR correction...")
+        if calibration_duration is not None:
+            # Use explicit calibration duration by cropping calibration data
+            # but apply to full data
+            calibration_raw_subset = original_raw.copy().crop(tmax=calibration_duration)
+            if verbose:
+                logger.info(f"Fitting ASR on first {calibration_duration:.1f}s of data...")
+            asr.fit(calibration_raw_subset)
+            if verbose:
+                logger.info("Applying ASR correction to full dataset...")
+            cleaned_raw = asr.transform(original_raw.copy())
+        else:
+            # Use ASRpy default inline calibration
+            asr.fit(original_raw)
+            cleaned_raw = asr.transform(original_raw.copy())
+
+        # Validate output
+        if not isinstance(cleaned_raw, BaseRaw):
+            raise RuntimeError("ASR did not return a valid MNE Raw object")
+        
+        # Calculate correction statistics
+        original_data = raw.get_data()
+        cleaned_data = cleaned_raw.get_data()
+        
+        # Calculate RMS difference for each channel
+        rms_original = np.sqrt(np.mean(original_data**2, axis=1))
+        rms_cleaned = np.sqrt(np.mean(cleaned_data**2, axis=1))
+        rms_change = (rms_cleaned - rms_original) / rms_original * 100
+        
+        # Calculate correlation between original and cleaned data
+        correlations = []
+        for ch_idx in range(n_channels):
+            corr = np.corrcoef(original_data[ch_idx], cleaned_data[ch_idx])[0, 1]
+            correlations.append(corr)
+        
+        mean_correlation = np.nanmean(correlations)
+        
+        # Calculate global metrics
+        global_var_original = np.var(original_data)
+        global_var_cleaned = np.var(cleaned_data)
+        variance_change = (global_var_cleaned - global_var_original) / global_var_original * 100
+        
+        # Store comprehensive metrics for quality tracking
+        cleaned_raw._asr_metrics = {
+            'cutoff': cutoff,
+            'method': method,
+            'blocksize': blocksize,
+            'window_length': window_length,
+            'window_overlap': window_overlap,
+            'max_dropout_fraction': max_dropout_fraction,
+            'min_clean_fraction': min_clean_fraction,
+            'calibration_duration': calibration_duration,
+            'data_duration': duration,
+            'calibration_approach': 'explicit_duration' if calibration_duration else 'automatic_inline',
+            'processing_time': duration,
+            'n_channels': n_channels,
+            'mean_correlation': float(mean_correlation),
+            'variance_change_percent': float(variance_change),
+            'channel_rms_changes': rms_change.tolist(),
+            'channel_correlations': [float(c) for c in correlations],
+            'parameters': {
+                'cutoff': cutoff,
+                'method': method,
+                'blocksize': blocksize,
+                'calibration_duration': calibration_duration,
+                'window_params': {
+                    'length': window_length,
+                    'overlap': window_overlap
+                },
+                'dropout_params': {
+                    'max_dropout_fraction': max_dropout_fraction,
+                    'min_clean_fraction': min_clean_fraction
+                }
+            }
+        }
+        
+        # Log summary
+        logger.success(f"ASR correction completed")
+        logger.info(f"  Calibration: {calibration_duration:.1f}s" if calibration_duration else "  Calibration: automatic inline")
+        logger.info(f"  Mean channel correlation: {mean_correlation:.3f}")
+        logger.info(f"  Variance change: {variance_change:+.1f}%")
+        
+        channels_changed = np.sum(np.abs(rms_change) > 5)  # Channels with >5% RMS change
+        logger.info(f"  Channels with significant change: {channels_changed}/{n_channels}")
+        
+        # Enhanced calibration quality assessment
+        if mean_correlation < 0.8:
+            logger.warning(f"  Low correlation ({mean_correlation:.3f}) suggests poor calibration or excessive correction")
+            logger.warning("  Consider: longer calibration data, higher cutoff, or checking data quality")
+        
+        if channels_changed == 0:
+            logger.info("  No significant artifacts detected - minimal correction applied")
+        elif channels_changed > n_channels * 0.5:
+            logger.warning(f"  High number of channels corrected ({channels_changed}). Consider checking data quality.")
+            logger.warning("  Potential issues: insufficient calibration data or very noisy data")
+        
+        # Optional visualization
+        if show_plot:
+            _plot_asr_comparison(raw, cleaned_raw, plot_start, plot_duration)
+        
+        return cleaned_raw
+        
+    except Exception as e:
+        logger.error(f"ASR correction failed: {str(e)}")
+        logger.info("Returning original data unchanged")
+        
+        # Return original data with error metrics
+        error_raw = raw.copy()
+        error_raw._asr_metrics = {
+            'cutoff': cutoff,
+            'method': method,
+            'calibration_duration': calibration_duration,
+            'calibration_approach': 'explicit_duration' if calibration_duration else 'automatic_inline',
+            'error': str(e),
+            'correction_applied': False,
+            'parameters': {
+                'cutoff': cutoff,
+                'method': method,
+                'blocksize': blocksize,
+                'calibration_duration': calibration_duration
+            }
+        }
+        
+        return error_raw
+
+
+def _plot_asr_comparison(
+        original_raw: BaseRaw, 
+        cleaned_raw: BaseRaw, 
+        start_time: float, 
+        duration: float
+) -> None:
+    """
+    Plot before/after comparison of ASR correction.
+    
+    Args:
+        original_raw: Original raw data
+        cleaned_raw: ASR-corrected raw data  
+        start_time: Start time for plot (seconds)
+        duration: Duration to plot (seconds)
+    """
+    import matplotlib.pyplot as plt
+    
+    # Select a subset of EEG channels for plotting (max 6 for clarity)
+    eeg_picks = pick_types(original_raw.info, eeg=True, meg=False)[:6]
+    
+    if len(eeg_picks) == 0:
+        logger.warning("No EEG channels found for ASR comparison plot")
+        return
+    
+    # Extract data for plotting
+    start_idx = int(start_time * original_raw.info['sfreq'])
+    end_idx = start_idx + int(duration * original_raw.info['sfreq'])
+    
+    if end_idx > original_raw.n_times:
+        end_idx = original_raw.n_times
+        logger.warning(f"Plot duration adjusted to fit data length")
+    
+    time = original_raw.times[start_idx:end_idx]
+    
+    original_data = original_raw.get_data(picks=eeg_picks, start=start_idx, stop=end_idx) * 1e6  # µV
+    cleaned_data = cleaned_raw.get_data(picks=eeg_picks, start=start_idx, stop=end_idx) * 1e6  # µV
+    
+    # Create comparison plot
+    n_channels = len(eeg_picks)
+    fig, axes = plt.subplots(n_channels, 1, figsize=(14, 2*n_channels), sharex=True)
+    
+    if n_channels == 1:
+        axes = [axes]
+    
+    # Channel names for plotting
+    ch_names = [original_raw.ch_names[pick] for pick in eeg_picks]
+    
+    for i, (ax, ch_name) in enumerate(zip(axes, ch_names)):
+        # Plot original in blue
+        ax.plot(time, original_data[i], 'b-', alpha=0.7, linewidth=1, label='Original')
+        
+        # Plot cleaned in red
+        ax.plot(time, cleaned_data[i], 'r-', alpha=0.8, linewidth=1, label='ASR Corrected')
+        
+        # Calculate and display correlation
+        correlation = np.corrcoef(original_data[i], cleaned_data[i])[0, 1]
+        
+        ax.set_ylabel(f'{ch_name}\n(µV)', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        ax.set_title(f'{ch_name} - Correlation: {correlation:.3f}', fontsize=10)
+        
+        if i == 0:
+            ax.legend(loc='upper right')
+
+    axes[-1].set_xlabel('Time (s)')
+    
+    # Overall title with statistics
+    if hasattr(cleaned_raw, '_asr_metrics'):
+        metrics = cleaned_raw._asr_metrics
+        cutoff = metrics['cutoff']
+        mean_corr = metrics['mean_correlation']
+        var_change = metrics['variance_change_percent']
+        
+        fig.suptitle(
+            f'ASR Artifact Correction (Cutoff: {cutoff}, Mean Correlation: {mean_corr:.3f}, '
+            f'Variance Change: {var_change:+.1f}%)',
+            fontsize=12, y=0.98
+        )
+    else:
+        fig.suptitle('ASR Artifact Correction - Before vs After', fontsize=12, y=0.98)
+    
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.95)
+    plt.show()
+
+
+def get_asr_quality_summary(raw: BaseRaw) -> Dict:
+    """
+    Extract ASR quality summary from processed raw data.
+    
+    Args:
+        raw: Processed raw data with _asr_metrics attribute
+        
+    Returns:
+        Dictionary with ASR quality metrics
+    """
+    if hasattr(raw, '_asr_metrics'):
+        return raw._asr_metrics.copy()
+    else:
+        # Fallback for raw data without ASR metrics
+        return {
+            'cutoff': None,
+            'method': 'unknown',
+            'correction_applied': False,
+            'mean_correlation': None,
+            'variance_change_percent': None
+        }
+
+
+# Legacy wrapper for backward compatibility
+def remove_artifacts_asr(raw: BaseRaw, **kwargs) -> BaseRaw:
+    """
+    Legacy wrapper for clean_rawdata_asr.
+    
+    Deprecated: Use clean_rawdata_asr instead.
+    ASR should be used as an intermediate cleaning step, not as an alternative to ICA.
+    """
+    logger.warning("remove_artifacts_asr is deprecated. Use clean_rawdata_asr instead.")
+    logger.warning("ASR should be applied as an intermediate cleaning step after bad channel detection but before ICA.")
+    return clean_rawdata_asr(raw, **kwargs)
 

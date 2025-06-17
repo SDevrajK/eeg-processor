@@ -1,4 +1,9 @@
-# quality_control/quality_html_generator.py
+"""
+Quality HTML Generator
+
+Creates clean, research-focused HTML reports with critical issues prominently displayed.
+Adapts content based on processing pipeline used.
+"""
 
 from pathlib import Path
 from typing import Dict, List
@@ -8,489 +13,483 @@ from loguru import logger
 
 class QualityHTMLGenerator:
     """
-    Generates HTML reports for quality control data.
-
-    Handles all HTML template generation and file creation for both
-    summary and individual participant reports.
+    Generates clean, minimal HTML reports focused on EEG research priorities.
+    
+    Features:
+    - Critical issues displayed prominently at top
+    - Adaptive content based on pipeline stages used
+    - Clean, scannable layout without visual clutter
+    - Research-focused information hierarchy
     """
-
-    def __init__(self):
-        """Initialize HTML generator with common CSS styles"""
-        self.common_css = self._get_common_css()
-
-    def create_summary_report(self, output_path: Path, stats: Dict, plots: Dict[str, str]) -> Path:
+    
+    def __init__(self, pipeline_info: Dict):
         """
-        Create the main summary HTML report.
-
+        Initialize HTML generator.
+        
+        Args:
+            pipeline_info: Information about which stages were used
+        """
+        self.pipeline_info = pipeline_info
+        
+    def create_summary_report(self, output_path: Path, stats: Dict, plots: Dict[str, str], 
+                            flagged_participants: Dict) -> Path:
+        """
+        Create the main summary HTML report with critical alerts at top.
+        
         Args:
             output_path: Path where to save the HTML file
-            stats: Complete statistics from QualityMetricsAnalyzer
+            stats: Complete statistics from quality analyzer
             plots: Dictionary of plot names to base64 encoded images
-
+            flagged_participants: Participants organized by flag level
+            
         Returns:
             Path to the created HTML file
         """
-        html_content = self._create_summary_html_content(stats, plots)
-
+        html_content = self._create_summary_html_content(stats, plots, flagged_participants)
+        
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
-
+            
         logger.info(f"Summary report created: {output_path}")
         return output_path
-
-    def create_participant_reports(self, individual_dir: Path, participants_data: Dict,
-                                   participant_plots: Dict[str, Dict[str, str]]) -> List[Path]:
-        """
-        Create individual participant HTML reports.
-
-        Args:
-            individual_dir: Directory where to save individual reports
-            participants_data: Dictionary of participant_id -> participant stats
-            participant_plots: Dictionary of participant_id -> plots
-
-        Returns:
-            List of paths to created HTML files
-        """
-        individual_dir.mkdir(exist_ok=True)
-        report_paths = []
-
-        for participant_id, participant_stats in participants_data.items():
-            output_path = individual_dir / f"{participant_id}_quality_report.html"
-            plots = participant_plots.get(participant_id, {})
-
-            html_content = self._create_participant_html_content(
-                participant_id, participant_stats, plots
-            )
-
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-
-            report_paths.append(output_path)
-
-        logger.info(f"Created {len(report_paths)} individual participant reports")
-        return report_paths
-
-    def _create_summary_html_content(self, stats: Dict, plots: Dict[str, str]) -> str:
-        """Create the main summary report HTML content"""
+    
+    def _create_summary_html_content(self, stats: Dict, plots: Dict[str, str], 
+                                   flagged_participants: Dict) -> str:
+        """Create the main summary report HTML content."""
         dataset_info = stats['dataset_info']
-        completion_stats = stats['completion_stats']
-        quality_stats = stats['quality_stats']
-        processing_stats = stats['processing_stats']
-
+        
         return f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <title>EEG Processing Quality Summary Report</title>
+    <title>EEG Quality Control Report</title>
     <style>
-        {self.common_css}
-        {self._get_summary_specific_css()}
+        {self._get_clean_css()}
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🧠 EEG Processing Quality Summary Report</h1>
-        <p style="font-size: 1.2em; color: #7f8c8d; margin: 1rem 0 0 0;">Comprehensive Analysis Dashboard</p>
-    </div>
-
-    <div class="container">
-        <div class="content">
-            {self._create_basic_stats_section(completion_stats, processing_stats)}
-
-            {self._create_quality_indicators_section(quality_stats)}
-
-            {self._create_dashboard_section(plots)}
-
-            {self._create_detailed_analysis_section(plots)}
-
-            {self._create_bad_channels_section(plots)}
-
-            {self._create_processing_overview_section(plots)}
-        </div>
-    </div>
-
-    {self._create_footer(dataset_info)}
-</body>
-</html>"""
-
-    def _create_participant_html_content(self, participant_id: str, participant_stats: Dict,
-                                         plots: Dict[str, str]) -> str:
-        """Create individual participant report HTML content"""
-        participant_data = participant_stats['participant_data']
-        summary_stats = participant_stats['summary_stats']
-
-        return f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Quality Report: {participant_id}</title>
-    <style>
-        {self.common_css}
-        {self._get_participant_specific_css()}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="back-link">
-            <a href="../quality_summary_report.html">← Back to Summary Report</a>
-        </div>
-        <h1>🧠 Quality Report: {participant_id}</h1>
-        <div class="status-indicator">
-            {'✅ Processing Completed' if participant_data['completed'] else '❌ Processing Incomplete'}
-            <span class="quality-badge quality-{summary_stats['overall_quality'].lower()}">{summary_stats['overall_quality']} QUALITY</span>
+        <h1>🧠 EEG Quality Control Report</h1>
+        <div class="header-info">
+            <span>Dataset: {dataset_info.get('total_participants', 0)} participants</span>
+            <span>Pipeline: {self.pipeline_info['data_type'].title()} data processing</span>
+            <span>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}</span>
         </div>
     </div>
 
     <div class="container">
-        <div class="content">
-            {self._create_participant_summary_card(summary_stats)}
-
-            {self._create_participant_plots_sections(plots)}
-        </div>
+        {self._create_critical_alerts_section(flagged_participants)}
+        
+        {self._create_pipeline_summary_section()}
+        
+        {self._create_quality_overview_section(plots)}
+        
+        {self._create_detailed_analysis_section(plots)}
     </div>
 
-    {self._create_participant_footer(participant_id, participant_data)}
+    <div class="footer">
+        <p>EEG Processor Quality Control System | Report generated {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
 </body>
 </html>"""
 
-    def _create_basic_stats_section(self, completion_stats: Dict, processing_stats: Dict) -> str:
-        """Create the basic statistics grid section"""
-        return f"""
-            <!-- Basic Statistics -->
-            <div class="basic-stats">
-                <div class="stat-item">
-                    <div class="stat-number">{completion_stats['total_participants']}</div>
-                    <div class="stat-label">Total Participants</div>
+    def _create_critical_alerts_section(self, flagged_participants: Dict) -> str:
+        """Create the critical alerts section at the top of the report."""
+        critical_participants = flagged_participants['critical']
+        warning_participants = flagged_participants['warning']
+        
+        html = '<div class="alerts-section">'
+        
+        # Critical issues (if any)
+        if critical_participants:
+            html += '''
+            <div class="alert critical-alert">
+                <h2>🚨 Critical Quality Issues</h2>
+                <p>The following participants require immediate attention:</p>
+                <table class="alert-table">
+                    <thead>
+                        <tr>
+                            <th>Participant</th>
+                            <th>Issues</th>
+                        </tr>
+                    </thead>
+                    <tbody>'''
+            
+            for participant in critical_participants:
+                participant_id = participant['participant_id']
+                issues = '; '.join(participant['reasons'])
+                html += f'''
+                        <tr>
+                            <td><strong>{participant_id}</strong></td>
+                            <td>{issues}</td>
+                        </tr>'''
+            
+            html += '''
+                    </tbody>
+                </table>
+            </div>'''
+        
+        # Warning issues (if any)
+        if warning_participants:
+            html += '''
+            <div class="alert warning-alert">
+                <h2>⚠️ Quality Warnings</h2>
+                <p>The following participants have quality concerns:</p>
+                <table class="alert-table">
+                    <thead>
+                        <tr>
+                            <th>Participant</th>
+                            <th>Concerns</th>
+                        </tr>
+                    </thead>
+                    <tbody>'''
+            
+            for participant in warning_participants:
+                participant_id = participant['participant_id']
+                issues = '; '.join(participant['reasons'])
+                html += f'''
+                        <tr>
+                            <td><strong>{participant_id}</strong></td>
+                            <td>{issues}</td>
+                        </tr>'''
+            
+            html += '''
+                    </tbody>
+                </table>
+            </div>'''
+        
+        # All good message (if no issues)
+        if not critical_participants and not warning_participants:
+            html += '''
+            <div class="alert success-alert">
+                <h2>✅ All Participants Processed Successfully</h2>
+                <p>No critical quality issues detected. All participants meet quality standards.</p>
+            </div>'''
+        
+        html += '</div>'
+        return html
+    
+    def _create_pipeline_summary_section(self) -> str:
+        """Create pipeline summary section."""
+        pipeline_summary = self._get_pipeline_summary()
+        
+        return f'''
+        <div class="section">
+            <h2>📋 Processing Pipeline Summary</h2>
+            <div class="pipeline-info">
+                <div class="pipeline-item">
+                    <strong>Data Type:</strong> {pipeline_summary['data_type']}
                 </div>
-                <div class="stat-item">
-                    <div class="stat-number">{completion_stats['completed_participants']}</div>
-                    <div class="stat-label">Completed Successfully</div>
+                <div class="pipeline-item">
+                    <strong>Total Stages:</strong> {pipeline_summary['total_stages']}
                 </div>
-                <div class="stat-item">
-                    <div class="stat-number">{completion_stats['completion_rate']:.1f}%</div>
-                    <div class="stat-label">Completion Rate</div>
+                <div class="pipeline-item">
+                    <strong>Key Features:</strong> {', '.join(pipeline_summary['key_features'])}
                 </div>
-                <div class="stat-item">
-                    <div class="stat-number">{processing_stats['avg_processing_time']:.1f}m</div>
-                    <div class="stat-label">Avg Processing Time</div>
+                <div class="pipeline-item">
+                    <strong>Processing Flow:</strong> {' → '.join(pipeline_summary['processing_flow'])}
                 </div>
-            </div>"""
-
-    def _create_quality_indicators_section(self, quality_stats: Dict) -> str:
-        """Create the quality indicators section"""
-        return f"""
-            <!-- Quality Indicators -->
-            <div class="quality-indicators">
-                <h3 style="margin-top: 0;">🎯 Quality Status</h3>
-                <span class="quality-indicator quality-good">Good Quality: {quality_stats['quality_flags']['good_participants']} participants</span>
-                <span class="quality-indicator quality-warning">Warning Level: {quality_stats['quality_flags']['warning_participants']} participants</span>
-                <span class="quality-indicator quality-critical">Critical Issues: {quality_stats['quality_flags']['critical_participants']} participants</span>
-                <span style="margin-left: 1rem;"><strong>Interpolation Success:</strong> {quality_stats['interpolation_success_rate']:.1f}%</span>
-            </div>"""
-
-    def _create_dashboard_section(self, plots: Dict[str, str]) -> str:
-        """Create the quality control dashboard section"""
-        return f"""
-            <!-- Critical Information Dashboard - First and Prominent -->
-            <h2>🎛️ Quality Control Dashboard</h2>
-            <div class="plot-grid single-column">
+            </div>
+        </div>'''
+    
+    def _create_quality_overview_section(self, plots: Dict[str, str]) -> str:
+        """Create quality overview section with key plots."""
+        html = '''
+        <div class="section">
+            <h2>📊 Quality Overview</h2>
+            <div class="plot-grid">'''
+        
+        # Quality summary plot (always present)
+        if 'quality_summary' in plots:
+            html += f'''
                 <div class="plot-container">
-                    <img src="{plots['dashboard_summary']}" alt="Quality Dashboard">
-                </div>
-            </div>"""
-
+                    <h3>Overall Quality Distribution</h3>
+                    <img src="{plots['quality_summary']}" alt="Quality Summary">
+                </div>'''
+        
+        # Completion overview plot (always present)
+        if 'completion_overview' in plots:
+            html += f'''
+                <div class="plot-container full-width">
+                    <h3>Processing Stage Completion</h3>
+                    <img src="{plots['completion_overview']}" alt="Completion Overview">
+                </div>'''
+        
+        html += '''
+            </div>
+        </div>'''
+        return html
+    
     def _create_detailed_analysis_section(self, plots: Dict[str, str]) -> str:
-        """Create the detailed processing analysis section"""
-        return f"""
-            <!-- Main Analysis Plots - 2x2 Grid -->
-            <h2>📊 Detailed Processing Analysis</h2>
-            <div class="plot-grid">
+        """Create detailed analysis section with stage-specific plots."""
+        html = '''
+        <div class="section">
+            <h2>🔬 Detailed Quality Analysis</h2>
+            <div class="plot-grid">'''
+        
+        # Add stage-specific plots only if they exist
+        stage_plots = {
+            'bad_channels': ('Bad Channels Analysis', 'Bad Channel Detection Results'),
+            'epoch_rejection': ('Epoch Rejection Analysis', 'Epoch Quality Assessment'),
+            'ica_components': ('ICA Analysis', 'Independent Component Analysis Results')
+        }
+        
+        for plot_key, (title, description) in stage_plots.items():
+            if plot_key in plots:
+                html += f'''
                 <div class="plot-container">
-                    <h3>Processing Completion Matrix</h3>
-                    <img src="{plots['completion_matrix']}" alt="Completion Matrix">
-                </div>
-                <div class="plot-container">
-                    <h3>Quality Metrics Distributions</h3>
-                    <img src="{plots['quality_distributions']}" alt="Quality Distributions">
-                </div>
-            </div>"""
-
-    def _create_bad_channels_section(self, plots: Dict[str, str]) -> str:
-        """Create the bad channels analysis section"""
-        return f"""
-            <!-- Bad Channels Analysis - Full Width -->
-            <h2>🔍 Bad Channels by Participant</h2>
-            <div class="plot-grid single-column">
-                <div class="plot-container">
-                    <img src="{plots['participant_bad_channels']}" alt="Bad Channels by Participant">
-                </div>
-            </div>"""
-
-    def _create_processing_overview_section(self, plots: Dict[str, str]) -> str:
-        """Create the processing overview section"""
-        return f"""
-            <!-- Processing Overview - Full Width at End -->
-            <h2>⏱️ Processing Overview</h2>
-            <div class="plot-grid single-column">
-                <div class="plot-container">
-                    <img src="{plots['processing_overview']}" alt="Processing Overview">
-                </div>
-            </div>"""
-
-    def _create_participant_summary_card(self, summary_stats: Dict) -> str:
-        """Create the participant summary card"""
-        return f"""
-            <div class="summary-card">
-                <h3 style="margin-top: 0;">📊 Processing Summary</h3>
-                <div class="summary-grid">
-                    <div class="summary-item">
-                        <div class="summary-number">{summary_stats['total_conditions']}</div>
-                        <div class="summary-label">Conditions Processed</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-number">{summary_stats['success_rate']:.1f}%</div>
-                        <div class="summary-label">Success Rate</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-number">{summary_stats['total_processing_time']:.1f}m</div>
-                        <div class="summary-label">Total Processing Time</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-number">{summary_stats['total_bad_channels']}</div>
-                        <div class="summary-label">Bad Channels Detected</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-number">{summary_stats['total_ica_components']}</div>
-                        <div class="summary-label">ICA Components Removed</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-number">{summary_stats['total_stages']}</div>
-                        <div class="summary-label">Total Stages Executed</div>
-                    </div>
-                </div>
-                <div style="margin-top: 1.5rem;">
-                    <strong>Quality Flags:</strong>
-                    <span class="quality-badge quality-critical">Critical: {summary_stats['critical_flags']}</span>
-                    <span class="quality-badge quality-warning">Warning: {summary_stats['warning_flags']}</span>
-                </div>
-            </div>"""
-
-    def _create_participant_plots_sections(self, plots: Dict[str, str]) -> str:
-        """Create all participant plot sections"""
-        return f"""
-            <h2>📈 Condition Overview</h2>
-            <div class="plot-container">
-                <img src="{plots.get('condition_overview', '')}" alt="Condition Overview">
+                    <h3>{title}</h3>
+                    <p class="plot-description">{description}</p>
+                    <img src="{plots[plot_key]}" alt="{title}">
+                </div>'''
+        
+        html += '''
             </div>
-
-            <h2>🔍 Quality Details</h2>
-            <div class="plot-container">
-                <img src="{plots.get('quality_details', '')}" alt="Quality Details">
-            </div>
-
-            <h2>⏱️ Processing Timeline</h2>
-            <div class="plot-container">
-                <img src="{plots.get('processing_timeline', '')}" alt="Processing Timeline">
-            </div>
-
-            <h2>📋 Detailed Metrics</h2>
-            <div class="plot-container">
-                <img src="{plots.get('detailed_metrics', '')}" alt="Detailed Metrics">
-            </div>"""
-
-    def _create_footer(self, dataset_info: Dict) -> str:
-        """Create the main report footer"""
-        return f"""
-    <div class="footer">
-        <p><strong>Report Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-        <p><strong>Processing Period:</strong> {dataset_info['start_time']} to {dataset_info['end_time']}</p>
-        <p>🔬 Advanced EEG Quality Control System</p>
-    </div>"""
-
-    def _create_participant_footer(self, participant_id: str, participant_data: Dict) -> str:
-        """Create the participant report footer"""
-        return f"""
-    <div class="footer">
-        <p><strong>Individual Report for:</strong> {participant_id}</p>
-        <p><strong>Processing Period:</strong> {participant_data['start_time']} to {participant_data.get('end_time', 'In Progress')}</p>
-        <p><strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-    </div>"""
-
-    def _get_common_css(self) -> str:
-        """Get common CSS styles used in both report types"""
+        </div>'''
+        return html
+    
+    def _get_pipeline_summary(self) -> Dict:
+        """Get pipeline summary information for display."""
+        # Key features based on detected stages
+        features = []
+        if self.pipeline_info['has_epoching']:
+            features.append("Event-related analysis")
+        else:
+            features.append("Continuous data analysis")
+            
+        if self.pipeline_info['has_ica']:
+            features.append("ICA artifact removal")
+        if self.pipeline_info['has_asr']:
+            features.append("ASR artifact correction")
+        if self.pipeline_info['has_bad_channels']:
+            features.append("Bad channel detection")
+        
+        # Processing flow - use correct order directly from stages_used
+        # Define the correct processing order
+        standard_order = [
+            'crop',
+            'segment_condition', 
+            'compute_eog',
+            'filter',
+            'detect_bad_channels',
+            'clean_rawdata_asr',
+            'rereference',
+            'blink_artifact',
+            'epoch',
+            'time_frequency'
+        ]
+        
+        # Get only stages that were actually used, in the correct order
+        used_stages = self.pipeline_info['stages_used']
+        ordered_stages = [stage for stage in standard_order if stage in used_stages]
+        
+        # Map to display labels
+        stage_labels = {
+            'crop': 'Crop',
+            'segment_condition': 'Segment',
+            'compute_eog': 'EOG Computation',
+            'filter': 'Filter', 
+            'detect_bad_channels': 'Bad Channels',
+            'clean_rawdata_asr': 'ASR',
+            'rereference': 'Re-reference',
+            'blink_artifact': 'ICA',
+            'epoch': 'Epoch',
+            'time_frequency': 'Time-Frequency'
+        }
+        
+        flow_stages = [stage_labels.get(stage, stage.title()) for stage in ordered_stages]
+        
+        return {
+            'data_type': self.pipeline_info['data_type'].title(),
+            'total_stages': len(self.pipeline_info['stages_used']),
+            'key_features': features,
+            'processing_flow': flow_stages
+        }
+    
+    def _get_clean_css(self) -> str:
+        """Get clean, minimal CSS styling focused on readability."""
         return """
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            margin: 0; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            min-height: 100vh; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .header { 
-            background: rgba(255,255,255,0.95); 
-            padding: 2rem; 
-            text-align: center; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
         }
-        .container { 
-            max-width: 1400px; 
-            margin: 2rem auto; 
-            background: white; 
-            border-radius: 15px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
-            overflow: hidden; 
+        
+        .header {
+            background: white;
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 3px solid #007bff;
+            margin-bottom: 2rem;
         }
-        .content { 
-            padding: 2rem; 
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 1rem;
+            font-size: 2.2em;
         }
-        h1 { 
-            color: #2c3e50; 
-            margin: 0; 
-            font-size: 2.5em; 
-            font-weight: 700; 
+        
+        .header-info {
+            color: #6c757d;
+            font-size: 1.1em;
         }
-        h2 { 
-            color: #34495e; 
-            margin: 2rem 0 1rem 0; 
-            font-size: 1.8em; 
-            border-left: 4px solid #3498db; 
-            padding-left: 1rem; 
+        
+        .header-info span {
+            margin: 0 1rem;
         }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem 2rem 2rem;
+        }
+        
+        .section {
+            background: white;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .alerts-section {
+            margin-bottom: 2rem;
+        }
+        
+        .alert {
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+        }
+        
+        .critical-alert {
+            background-color: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .warning-alert {
+            background-color: #fff3cd;
+            border-left-color: #ffc107;
+            color: #856404;
+        }
+        
+        .success-alert {
+            background-color: #d1edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        
+        .alert h2 {
+            margin-bottom: 1rem;
+            font-size: 1.3em;
+        }
+        
+        .alert-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        .alert-table th,
+        .alert-table td {
+            text-align: left;
+            padding: 0.8rem;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .alert-table th {
+            background-color: rgba(0,0,0,0.05);
+            font-weight: bold;
+        }
+        
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            font-size: 1.8em;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 0.5rem;
+        }
+        
         h3 {
-            color: #34495e;
-            margin: 1rem 0;
-            font-size: 1.2em;
+            color: #495057;
+            margin-bottom: 1rem;
+            font-size: 1.3em;
         }
-        .plot-container { 
-            text-align: center; 
-            background: #f8f9fa; 
-            padding: 1.5rem; 
-            border-radius: 12px; 
-            margin: 1rem 0;
+        
+        .pipeline-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
         }
-        .plot-container img { 
-            max-width: 100%; 
-            height: auto; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+        
+        .pipeline-item {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            border-left: 3px solid #007bff;
         }
-        .quality-indicator { 
-            display: inline-block; 
-            padding: 0.5rem 1rem; 
-            border-radius: 20px; 
-            font-weight: bold; 
-            margin: 0.25rem; 
+        
+        .plot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-top: 1.5rem;
         }
-        .quality-badge { 
-            display: inline-block; 
-            padding: 0.5rem 1rem; 
-            border-radius: 20px; 
-            font-weight: bold; 
-            margin: 0.5rem; 
+        
+        .plot-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
         }
-        .quality-good { 
-            background: #2ecc71; 
-            color: white; 
+        
+        .plot-container.full-width {
+            grid-column: 1 / -1;
         }
-        .quality-warning { 
-            background: #f39c12; 
-            color: white; 
+        
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin-top: 1rem;
         }
-        .quality-critical { 
-            background: #e74c3c; 
-            color: white; 
+        
+        .plot-description {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 1rem;
         }
-        .footer { 
-            background: #2c3e50; 
-            color: white; 
-            padding: 2rem; 
-            text-align: center; 
+        
+        .footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 1.5rem;
+            margin-top: 3rem;
         }
-        .status-indicator { 
-            font-size: 1.5em; 
-            margin: 0.5rem; 
-        }"""
-
-    def _get_summary_specific_css(self) -> str:
-        """Get CSS specific to summary reports"""
-        return """
-        /* Horizontal Grid Layout */
-        .plot-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 2rem; 
-            margin: 2rem 0; 
+        
+        @media (max-width: 768px) {
+            .plot-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .pipeline-info {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-info span {
+                display: block;
+                margin: 0.5rem 0;
+            }
         }
-        .plot-grid.single-column { 
-            grid-template-columns: 1fr; 
-        }
-
-        /* Basic stats summary */
-        .basic-stats { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
-            gap: 1rem; 
-            margin: 2rem 0; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            color: white; 
-            padding: 1.5rem; 
-            border-radius: 12px; 
-        }
-        .stat-item { 
-            text-align: center; 
-        }
-        .stat-number { 
-            font-size: 2em; 
-            font-weight: bold; 
-        }
-        .stat-label { 
-            font-size: 0.9em; 
-            opacity: 0.9; 
-        }
-
-        /* Quality indicators */
-        .quality-indicators { 
-            background: #f8f9fa; 
-            padding: 1.5rem; 
-            border-radius: 12px; 
-            margin: 2rem 0; 
-        }"""
-
-    def _get_participant_specific_css(self) -> str:
-        """Get CSS specific to participant reports"""
-        return """
-        .back-link { 
-            margin-bottom: 2rem; 
-        }
-        .back-link a { 
-            color: #3498db; 
-            text-decoration: none; 
-            font-size: 1.1em; 
-            font-weight: 500; 
-        }
-        .back-link a:hover { 
-            text-decoration: underline; 
-        }
-        .summary-card { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            color: white; 
-            padding: 2rem; 
-            border-radius: 12px; 
-            margin: 2rem 0; 
-        }
-        .summary-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-            gap: 1.5rem; 
-            margin-top: 1rem; 
-        }
-        .summary-item { 
-            text-align: center; 
-        }
-        .summary-number { 
-            font-size: 2em; 
-            font-weight: bold; 
-        }
-        .summary-label { 
-            font-size: 0.9em; 
-            opacity: 0.9; 
-        }"""
+        """

@@ -39,6 +39,7 @@ setup(
         "pandas>=1.5.0",
         "seaborn>=0.11.0",
         "pingouin>=0.5.0",
+        "asrpy>=0.0.4",  # Artifact Subspace Reconstruction
     ],
     extras_require={
         "cli": ["click>=8.0.0"],

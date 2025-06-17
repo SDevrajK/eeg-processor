@@ -231,46 +231,121 @@ def segment_by_condition_markers(raw: BaseRaw,
           in-place operation replaces the original object's content entirely.
     """
     # Critical validation - let these bubble up
-    markers = condition.get('condition_markers')
-    if not markers or len(markers) != 2:
-        raise ValueError("Condition must have exactly 2 markers [start, end]")
-
+    # Check for both legacy 'condition_markers' and new 'markers' format
+    markers = condition.get('condition_markers') or condition.get('markers')
+    
+    if not markers:
+        raise ValueError("Condition must have 'markers' or 'condition_markers' defined")
+    
     from mne import concatenate_raws
 
     # Always work on a copy first since we need to analyze events
     working_data = raw.copy()
     sfreq = working_data.info['sfreq']
 
-    # Critical failure - event finding errors should bubble up
-    try:
-        start_times = _get_event_times(working_data, markers[0])
-        end_times = _get_event_times(working_data, markers[1])
-    except ValueError as e:
-        logger.error(f"Event detection failed for markers {markers}: {str(e)}")
-        raise RuntimeError(f"Segmentation failed - cannot find events: {str(e)}") from e
+    # Handle different marker formats
+    if isinstance(markers, dict):
+        # New dict format: {trigger_id: [start_marker, end_marker], ...}
+        # Use ALL trigger sets to collect events
+        if not markers:
+            raise ValueError("Markers dictionary cannot be empty")
+        
+        logger.info(f"Processing {len(markers)} trigger sets: {list(markers.keys())}")
+        
+        all_start_times = []
+        all_end_times = []
+        trigger_info = []  # Track which trigger each event pair belongs to
+        
+        for trigger_id, marker_list in markers.items():
+            if not isinstance(marker_list, list) or len(marker_list) != 2:
+                raise ValueError(f"Each marker list must have exactly 2 markers [start, end], got {marker_list} for trigger '{trigger_id}'")
+            
+            try:
+                start_times = _get_event_times(working_data, marker_list[0])
+                end_times = _get_event_times(working_data, marker_list[1])
+                
+                logger.info(f"Trigger '{trigger_id}' markers {marker_list}: {len(start_times)} starts, {len(end_times)} ends")
+                
+                # Handle mismatched events for this trigger set
+                if len(start_times) != len(end_times):
+                    logger.warning(f"Trigger '{trigger_id}': Mismatched events ({len(start_times)} starts, {len(end_times)} ends). Using pairing strategy.")
+                    trigger_pairs = _pair_last_start_before_end(start_times, end_times)
+                    
+                    if trigger_pairs:
+                        logger.info(f"Trigger '{trigger_id}': Paired {len(trigger_pairs)} segments")
+                        for start_time, end_time in trigger_pairs:
+                            all_start_times.append(start_time)
+                            all_end_times.append(end_time)
+                            trigger_info.append(trigger_id)
+                    else:
+                        logger.warning(f"Trigger '{trigger_id}': No valid pairs found")
+                else:
+                    # Perfect match for this trigger set
+                    logger.info(f"Trigger '{trigger_id}': Perfect match with {len(start_times)} segments")
+                    for start_time, end_time in zip(start_times, end_times):
+                        all_start_times.append(start_time)
+                        all_end_times.append(end_time)
+                        trigger_info.append(trigger_id)
+                        
+            except ValueError as e:
+                logger.warning(f"Event detection failed for trigger '{trigger_id}' with markers {marker_list}: {str(e)}")
+                continue  # Skip this trigger set but continue with others
+        
+        # Critical validation - no events found across all trigger sets
+        if len(all_start_times) == 0 or len(all_end_times) == 0:
+            error_msg = f"No events found across any trigger sets {list(markers.keys())} - data may be corrupt or incorrect condition"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        
+        # Create event pairs with trigger information
+        event_pairs = list(zip(all_start_times, all_end_times))
+        logger.info(f"Combined all trigger sets: {len(event_pairs)} total segments")
+        
+        # Log summary by trigger
+        trigger_counts = {}
+        for trigger_id in trigger_info:
+            trigger_counts[trigger_id] = trigger_counts.get(trigger_id, 0) + 1
+        for trigger_id, count in trigger_counts.items():
+            logger.info(f"  Trigger '{trigger_id}': {count} segments")
+    
+    elif isinstance(markers, list):
+        # Handle legacy list format: [start_marker, end_marker]
+        if len(markers) != 2:
+            raise ValueError("Condition must have exactly 2 markers [start, end]")
+        
+        # Critical failure - event finding errors should bubble up
+        try:
+            start_times = _get_event_times(working_data, markers[0])
+            end_times = _get_event_times(working_data, markers[1])
+        except ValueError as e:
+            logger.error(f"Event detection failed for markers {markers}: {str(e)}")
+            raise RuntimeError(f"Segmentation failed - cannot find events: {str(e)}") from e
 
-    # Critical validation - no events found means data is wrong
-    if len(start_times) == 0 or len(end_times) == 0:
-        error_msg = f"No events found for markers {markers} - data may be corrupt or incorrect condition"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        # Critical validation - no events found means data is wrong
+        if len(start_times) == 0 or len(end_times) == 0:
+            error_msg = f"No events found for markers {markers} - data may be corrupt or incorrect condition"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-    # NEW: Handle mismatched events with intelligent pairing
-    if len(start_times) != len(end_times):
-        logger.warning(f"Mismatched events: {len(start_times)} starts, {len(end_times)} ends. "
-                       f"Using last-start-before-end pairing strategy.")
+        # Handle mismatched events with intelligent pairing
+        if len(start_times) != len(end_times):
+            logger.warning(f"Mismatched events: {len(start_times)} starts, {len(end_times)} ends. "
+                           f"Using last-start-before-end pairing strategy.")
 
-        event_pairs = _pair_last_start_before_end(start_times, end_times)
+            event_pairs = _pair_last_start_before_end(start_times, end_times)
 
-        if not event_pairs:
-            raise RuntimeError("No valid start-end pairs found using pairing strategy")
+            if not event_pairs:
+                raise RuntimeError("No valid start-end pairs found using pairing strategy")
 
-        logger.info(f"Paired {len(event_pairs)} segments from mismatched events")
+            logger.info(f"Paired {len(event_pairs)} segments from mismatched events")
 
+        else:
+            # Perfect match - use existing logic
+            event_pairs = list(zip(start_times, end_times))
+            logger.info(f"Perfect event match: {len(event_pairs)} segments")
+    
     else:
-        # Perfect match - use existing logic
-        event_pairs = list(zip(start_times, end_times))
-        logger.info(f"Perfect event match: {len(event_pairs)} segments")
+        raise ValueError("Markers must be a list [start, end] or dict {trigger: [start, end]}")
 
     # Process segments
     segments = []

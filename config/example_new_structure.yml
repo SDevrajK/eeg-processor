@@ -1,0 +1,148 @@
+# =============================================================================
+# STUDY INFORMATION
+# =============================================================================
+study:
+  name: "Residual_Inhibition_EEG"
+  dataset: "experimental"
+  description: "EEG analysis of residual inhibition effects on tinnitus perception"
+  researcher: "HébertLab"
+
+# =============================================================================
+# PARTICIPANTS & DATA
+# =============================================================================
+participants:
+  S_001_F: 
+    file: "S_001_F.fif"
+    age: 25
+    gender: "F"
+    group: "control"
+    session: "experimental"
+    tinnitus_severity: 7
+    hearing_threshold_db: 20
+    years_tinnitus: 3
+    
+  S_002_F:
+    file: "S_002_F.dat"
+    age: 30
+    gender: "F"
+    group: "experimental"
+    session: "experimental"
+    tinnitus_severity: 8
+    hearing_threshold_db: 25
+    years_tinnitus: 5
+    dominant_ear: "left"
+    
+  S_003_F:
+    file: "S_003_F.dat"
+    age: 28
+    gender: "F"
+    group: "control"
+    session: "experimental"
+    tinnitus_severity: 6
+    hearing_threshold_db: 15
+    years_tinnitus: 2
+
+# =============================================================================
+# EXPERIMENTAL CONDITIONS
+# =============================================================================
+conditions:
+  - name: "TFreq Hearing Level"
+    description: "Tinnitus frequency presented at hearing level"
+    triggers:
+      onset: 11
+      offset: 12
+    markers: [10, 19]
+    
+  - name: "TFreq Masking Level"
+    description: "Tinnitus frequency presented at masking level"
+    triggers:
+      onset: 21
+      offset: 22
+    markers: [20, 29]
+    
+  - name: "TFreq Inhibition Level"
+    description: "Tinnitus frequency presented at inhibition level"
+    triggers:
+      onset: 31
+      offset: 32
+    markers: [30, 39]
+
+# =============================================================================
+# DATA PATHS
+# =============================================================================
+paths:
+  raw_data: "C:/Users/sayee/Documents/Research/HébertLab/Residual_Inhibition_EEG/Data/EEG data/VRAIE ETUDE/"
+  results: "C:/Users/sayee/Documents/Research/HébertLab/Residual_Inhibition_EEG/Results/"
+  # The system will automatically create:
+  # - Results/processed/ (for processed data files)
+  # - Results/figures/ (for plots and visualizations)
+  # - Results/quality/ (for quality control reports)
+  # - Results/interim/ (for intermediate processing files)
+
+# =============================================================================
+# PROCESSING PIPELINE
+# =============================================================================
+processing:
+  # Data loading and segmentation
+  - segment_conditions: {}
+      
+  # Trigger correction
+  - correct_triggers:
+      method: "alternating"
+      
+  # Filtering
+  - filter:
+      notch: 60
+      highpass: 0.5
+      lowpass: 50
+      
+  # Channel processing
+  - detect_bad_channels:
+      interpolate: true
+      threshold: 2.0
+      n_neighbors: 20
+      
+  - rereference:
+      method: "average"
+      exclude: ["VEOG", "HEOG"]
+      
+  # Artifact removal
+  - remove_blink_artifacts:
+      method: "ica"
+      auto_classify: false
+      eog_channels: ["VEOG", "HEOG"]
+      ecg_channels: null
+      plot_components: false
+      enable_manual: false
+      decimation: 5
+  
+  # Alternative: ASR artifact removal
+  # - remove_artifacts_asr:
+  #     cutoff: 20                        # Standard deviation cutoff
+  #     method: "euclid"                  # Distance metric
+  #     calibration_duration: 60          # Calibration duration in seconds (optional)
+  #     show_plot: false                  # Visualization option
+      
+  # Epoching
+  - create_epochs:
+      time_window: [-1, 3]  # [tmin, tmax] in seconds
+      baseline: [-0.2, 0]   # baseline period in seconds
+      rejection:
+        eeg: 250e-6         # rejection threshold for EEG channels
+        eog: 1e-3           # rejection threshold for EOG channels
+        
+  # Analysis
+  - time_frequency_analysis:
+      method: "morlet"
+      frequency_range: [1, 50]
+      n_frequencies: 50
+      decimation: 10
+
+# =============================================================================
+# OUTPUT & QUALITY CONTROL
+# =============================================================================
+output:
+  save_intermediate: true
+  generate_plots: true
+  quality_report: true
+  file_format: "fif"

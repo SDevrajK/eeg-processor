@@ -1,0 +1,19 @@
+paths:
+  raw_data_dir: "tests/test_data/brainvision"
+  results_dir: "tests/test_data/results"
+  file_extension: ".vhdr"
+
+participants:
+  test: "test.vhdr"
+
+stages:
+  - load_data
+  - filter
+
+filtering:
+  lowpass: 40
+  highpass: 0.1
+
+conditions:
+  - name: "test_condition"
+    condition_markers: ["S1", "S2"]

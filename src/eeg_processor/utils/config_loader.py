@@ -8,9 +8,7 @@ from ..state_management.participant_handler import Participant
 @dataclass
 class PipelineConfig:
     raw_data_dir: Path
-    processed_dir: Path
-    figures_dir: Path
-    reports_dir: Path
+    results_dir: Path
     file_extension: str
     participants: Union[Dict[str, str], Dict[str, Dict[str, Any]]]  # Support both simple and detailed participant formats
     stages: List[Dict[str, Any]]  # Processing pipeline steps
@@ -18,6 +16,21 @@ class PipelineConfig:
     study_info: Dict[str, Any]
     output_config: Dict[str, Any]
     dataset_name: Optional[str] = None
+    
+    @property
+    def processed_dir(self) -> Path:
+        """Backward compatibility property - returns results_dir/processed"""
+        return self.results_dir / "processed"
+    
+    @property
+    def figures_dir(self) -> Path:
+        """Backward compatibility property - returns results_dir/figures"""
+        return self.results_dir / "figures"
+    
+    @property
+    def reports_dir(self) -> Path:
+        """Backward compatibility property - returns results_dir/quality"""
+        return self.results_dir / "quality"
 
 
 def load_config(config_path: Union[str, Dict[str, Any]], override_params: Optional[Dict[str, Any]] = None) -> PipelineConfig:
@@ -92,10 +105,15 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
         raise ValidationError("'paths' must be a dictionary")
 
     # Validate required path keys
-    required_path_keys = ['raw_data', 'processed']
+    required_path_keys = ['raw_data', 'results']
     missing_path_keys = [key for key in required_path_keys if key not in paths]
     if missing_path_keys:
         raise ValidationError(f"Missing required path keys: {missing_path_keys}")
+    
+    # Support legacy format for backward compatibility
+    if 'processed' in paths and 'results' not in paths:
+        logger.warning("Using legacy 'processed' path. Please update config to use 'results' path instead.")
+        paths['results'] = paths['processed']
 
     # Convert paths to absolute
     try:
@@ -135,10 +153,10 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     
     dataset_name = study_info.get('dataset')
     
-    # Get final paths
-    processed_dir = abs_paths.get('processed')
-    figures_dir = abs_paths.get('figures', processed_dir / 'figures' if processed_dir else None)
-    reports_dir = abs_paths.get('reports', processed_dir / 'reports' if processed_dir else None)
+    # Get results directory
+    results_dir = abs_paths.get('results')
+    if not results_dir:
+        raise ValidationError("Results directory path is required")
 
     # Validate conditions
     conditions = raw_config.get('conditions', [])
@@ -161,8 +179,25 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
         # Validate markers if present
         if 'markers' in cond:
             markers = cond['markers']
-            if not isinstance(markers, list):
-                raise ValidationError(f"Condition '{cond['name']}': markers must be a list")
+            # Allow markers to be None, empty list, list of markers, or dict with trigger->marker_list mapping
+            if markers is not None:
+                if isinstance(markers, list):
+                    # Original format: list of markers
+                    for j, marker in enumerate(markers):
+                        if not isinstance(marker, (str, int)):
+                            raise ValidationError(f"Condition '{cond['name']}': marker {j} must be string or integer, got {type(marker)}")
+                elif isinstance(markers, dict):
+                    # New format: dict with trigger->marker_list mapping
+                    for trigger_key, marker_list in markers.items():
+                        if not isinstance(trigger_key, (str, int)):
+                            raise ValidationError(f"Condition '{cond['name']}': trigger key '{trigger_key}' must be string or integer")
+                        if not isinstance(marker_list, list):
+                            raise ValidationError(f"Condition '{cond['name']}': marker list for trigger '{trigger_key}' must be a list")
+                        for j, marker in enumerate(marker_list):
+                            if not isinstance(marker, (str, int)):
+                                raise ValidationError(f"Condition '{cond['name']}': marker {j} in trigger '{trigger_key}' must be string or integer, got {type(marker)}")
+                else:
+                    raise ValidationError(f"Condition '{cond['name']}': markers must be a list, dict, or None")
 
     # Validate processing pipeline
     processing_stages = raw_config.get('processing', [])
@@ -176,9 +211,7 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
 
     return PipelineConfig(
         raw_data_dir=raw_data_dir,
-        processed_dir=processed_dir,
-        figures_dir=figures_dir,
-        reports_dir=reports_dir,
+        results_dir=results_dir,
         file_extension=paths.get('file_extension', '.vhdr'),
         participants=participants_data,
         stages=processing_stages,

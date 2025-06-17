@@ -63,7 +63,7 @@ def create_epochs(raw: BaseRaw,
     events, event_dict = events_from_annotations(raw)
     event_id = {}
 
-    for key, value in condition['epoch_events'].items():
+    for key, value in condition['triggers'].items():
         if isinstance(value, dict):  # Nested case
             for sub_key, sub_value in value.items():
                 event_id[f"{sub_key}"] = int(sub_value)
