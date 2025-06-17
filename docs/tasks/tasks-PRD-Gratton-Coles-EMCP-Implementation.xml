@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task_list>
+  <metadata>
+    <project_name>EEG Processor</project_name>
+    <prd_source>docs/PRD-Gratton-Coles-EMCP-Implementation.md</prd_source>
+    <generated_date>2025-01-17</generated_date>
+    <estimated_duration>5-7 days</estimated_duration>
+  </metadata>
+
+  <relevant_files>
+    <file action="create" type="implementation">
+      <path>src/eeg_processor/processing/emcp.py</path>
+      <description>Main EMCP module with both EOG regression and Gratton-Coles implementations</description>
+    </file>
+    <file action="modify" type="implementation">
+      <path>src/eeg_processor/state_management/data_processor.py</path>
+      <description>Add remove_blinks_emcp stage to DataProcessor registry</description>
+    </file>
+    <file action="modify" type="implementation">
+      <path>src/eeg_processor/processing/artifact.py</path>
+      <description>Replace existing remove_blinks_regression function</description>
+    </file>
+    <file action="modify" type="implementation">
+      <path>src/eeg_processor/quality_control/quality_tracker.py</path>
+      <description>Add EMCP metrics tracking support</description>
+    </file>
+    <file action="modify" type="implementation">
+      <path>src/eeg_processor/quality_control/quality_html_generator.py</path>
+      <description>Add EMCP visualization to HTML reports</description>
+    </file>
+    <file action="create" type="test">
+      <path>tests/test_emcp.py</path>
+      <description>Comprehensive unit tests for EMCP implementations</description>
+    </file>
+    <file action="create" type="test">
+      <path>tests/test_emcp_integration.py</path>
+      <description>Integration tests with DataProcessor pipeline</description>
+    </file>
+    <file action="create" type="config">
+      <path>config/emcp_examples.yml</path>
+      <description>Example configurations for both EMCP methods</description>
+    </file>
+    <file action="modify" type="config">
+      <path>CLAUDE.md</path>
+      <description>Update documentation with EMCP stage information</description>
+    </file>
+  </relevant_files>
+
+  <phases>
+    <phase name="core_emcp_module" order="1" estimated_days="1-2">
+      <description>Create the foundational EMCP module with both implementation methods</description>
+      
+      <task id="1" priority="high" estimated_hours="3-4">
+        <title>Create emcp.py module structure</title>
+        <description>Create the base EMCP module with imports, docstrings, and function signatures for both EOG regression and Gratton-Coles methods</description>
+        <acceptance_criteria>
+          <criterion>Module created with proper imports (MNE, NumPy, typing)</criterion>
+          <criterion>Function signatures defined for both methods</criterion>
+          <criterion>Comprehensive module docstring with method descriptions</criterion>
+          <criterion>Type hints added for all function parameters</criterion>
+        </acceptance_criteria>
+        <dependencies></dependencies>
+      </task>
+
+      <task id="2" priority="high" estimated_hours="4-6">
+        <title>Implement remove_blinks_eog_regression function</title>
+        <description>Implement MNE EOGRegression wrapper that respects current reference and follows pipeline patterns</description>
+        <acceptance_criteria>
+          <criterion>Function uses MNE's EOGRegression class correctly</criterion>
+          <criterion>Respects current EEG reference without forced changes</criterion>
+          <criterion>Supports both Raw and Epochs data types</criterion>
+          <criterion>Includes comprehensive error handling for missing EOG channels</criterion>
+          <criterion>Generates _emcp_metrics for quality tracking</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>1</task_id>
+        </dependencies>
+      </task>
+
+      <task id="3" priority="high" estimated_hours="4-6">
+        <title>Implement remove_blinks_gratton_coles function</title>
+        <description>Implement reference-agnostic Gratton-Coles method using direct linear regression adapted from research</description>
+        <acceptance_criteria>
+          <criterion>Function works with any reference scheme without modifications</criterion>
+          <criterion>Implements original Gratton-Coles algorithm correctly</criterion>
+          <criterion>Supports evoked response subtraction option</criterion>
+          <criterion>Calculates and stores regression coefficients</criterion>
+          <criterion>Generates quality metrics compatible with pipeline</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>1</task_id>
+        </dependencies>
+      </task>
+
+      <task id="4" priority="medium" estimated_hours="2-3">
+        <title>Add helper functions for validation and metrics</title>
+        <description>Implement _validate_eog_channels, _calculate_emcp_metrics, and other utility functions</description>
+        <acceptance_criteria>
+          <criterion>EOG channel validation with clear error messages</criterion>
+          <criterion>Metrics calculation for both EMCP methods</criterion>
+          <criterion>Correlation preservation analysis</criterion>
+          <criterion>Artifact reduction quantification</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>2</task_id>
+          <task_id>3</task_id>
+        </dependencies>
+      </task>
+
+      <task id="5" priority="medium" estimated_hours="3-4">
+        <title>Implement visualization functions</title>
+        <description>Create _plot_emcp_comparison function for before/after visualization and diagnostic plots</description>
+        <acceptance_criteria>
+          <criterion>Before/after EEG trace comparison plots</criterion>
+          <criterion>EOG-EEG correlation visualization</criterion>
+          <criterion>Method-specific diagnostic information</criterion>
+          <criterion>Integration with existing plotting patterns</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>4</task_id>
+        </dependencies>
+      </task>
+    </phase>
+
+    <phase name="pipeline_integration" order="2" estimated_days="1">
+      <description>Integrate EMCP stage into the DataProcessor pipeline system</description>
+      
+      <task id="6" priority="high" estimated_hours="2-3">
+        <title>Add _remove_blinks_emcp method to DataProcessor</title>
+        <description>Implement the pipeline stage method with proper method parameter handling following codebase patterns</description>
+        <acceptance_criteria>
+          <criterion>Method follows existing DataProcessor patterns</criterion>
+          <criterion>Supports method parameter ("eog_regression", "gratton_coles")</criterion>
+          <criterion>Handles inplace parameter correctly</criterion>
+          <criterion>Passes kwargs to selected implementation method</criterion>
+          <criterion>Includes proper error handling for unknown methods</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>2</task_id>
+          <task_id>3</task_id>
+        </dependencies>
+      </task>
+
+      <task id="7" priority="high" estimated_hours="1">
+        <title>Update DataProcessor stage registry</title>
+        <description>Add remove_blinks_emcp to the stage_registry dictionary in DataProcessor.__init__</description>
+        <acceptance_criteria>
+          <criterion>Stage added to registry with correct method reference</criterion>
+          <criterion>No conflicts with existing stage names</criterion>
+          <criterion>Maintains alphabetical organization if applicable</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>6</task_id>
+        </dependencies>
+      </task>
+
+      <task id="8" priority="medium" estimated_hours="2">
+        <title>Replace existing remove_blinks_regression implementation</title>
+        <description>Update or replace the broken remove_blinks_regression function in artifact.py</description>
+        <acceptance_criteria>
+          <criterion>Function replaced with working implementation or deprecated properly</criterion>
+          <criterion>Backward compatibility maintained where possible</criterion>
+          <criterion>Clear migration path documented</criterion>
+          <criterion>No breaking changes to existing configurations</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>7</task_id>
+        </dependencies>
+      </task>
+    </phase>
+
+    <phase name="quality_control_metrics" order="3" estimated_days="1-2">
+      <description>Implement comprehensive quality control and metrics tracking</description>
+      
+      <task id="9" priority="medium" estimated_hours="3-4">
+        <title>Integrate EMCP metrics with QualityTracker</title>
+        <description>Update QualityTracker to recognize and process EMCP-specific metrics</description>
+        <acceptance_criteria>
+          <criterion>QualityTracker recognizes _emcp_metrics attribute</criterion>
+          <criterion>EMCP metrics included in quality summaries</criterion>
+          <criterion>Method-specific metrics properly categorized</criterion>
+          <criterion>Integration with existing quality workflow</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>4</task_id>
+        </dependencies>
+      </task>
+
+      <task id="10" priority="medium" estimated_hours="2-3">
+        <title>Update HTML report generation for EMCP</title>
+        <description>Modify quality_html_generator.py to include EMCP visualizations and metrics in reports</description>
+        <acceptance_criteria>
+          <criterion>EMCP section added to HTML reports</criterion>
+          <criterion>Method-specific metrics displayed clearly</criterion>
+          <criterion>Before/after plots embedded in reports</criterion>
+          <criterion>Regression coefficients visualization</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>5</task_id>
+          <task_id>9</task_id>
+        </dependencies>
+      </task>
+
+      <task id="11" priority="low" estimated_hours="2">
+        <title>Add EMCP quality flagging rules</title>
+        <description>Implement automatic quality assessment rules specific to EMCP correction</description>
+        <acceptance_criteria>
+          <criterion>Quality thresholds defined for correlation preservation</criterion>
+          <criterion>Flagging rules for poor artifact correction</criterion>
+          <criterion>Integration with existing quality flagging system</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>9</task_id>
+        </dependencies>
+      </task>
+    </phase>
+
+    <phase name="testing_validation" order="4" estimated_days="1-2">
+      <description>Comprehensive testing and validation of EMCP implementations</description>
+      
+      <task id="12" priority="high" estimated_hours="4-5">
+        <title>Create comprehensive unit tests</title>
+        <description>Develop test_emcp.py with thorough unit tests for both EMCP methods</description>
+        <acceptance_criteria>
+          <criterion>Tests for both eog_regression and gratton_coles methods</criterion>
+          <criterion>Mock data generation for testing without real EEG files</criterion>
+          <criterion>Error condition testing (missing EOG channels, etc.)</criterion>
+          <criterion>Metrics validation testing</criterion>
+          <criterion>Reference scheme handling tests</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>4</task_id>
+        </dependencies>
+      </task>
+
+      <task id="13" priority="medium" estimated_hours="3-4">
+        <title>Create integration tests</title>
+        <description>Develop test_emcp_integration.py for pipeline integration testing</description>
+        <acceptance_criteria>
+          <criterion>Full pipeline testing with EMCP stage</criterion>
+          <criterion>Configuration parsing tests</criterion>
+          <criterion>DataProcessor integration verification</criterion>
+          <criterion>Quality control integration tests</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>7</task_id>
+          <task_id>10</task_id>
+        </dependencies>
+      </task>
+
+      <task id="14" priority="medium" estimated_hours="2-3">
+        <title>Validation against MNE examples</title>
+        <description>Create validation tests comparing results with MNE tutorial examples</description>
+        <acceptance_criteria>
+          <criterion>EOG regression method matches MNE tutorial results</criterion>
+          <criterion>Numerical accuracy validation</criterion>
+          <criterion>Performance benchmarking</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>12</task_id>
+        </dependencies>
+      </task>
+
+      <task id="15" priority="low" estimated_hours="2">
+        <title>Performance testing with large datasets</title>
+        <description>Test EMCP implementations with large datasets to verify performance requirements</description>
+        <acceptance_criteria>
+          <criterion>32-channel, 60-minute recordings processed in under 30 seconds</criterion>
+          <criterion>Memory usage monitoring and optimization</criterion>
+          <criterion>Scalability validation</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>13</task_id>
+        </dependencies>
+      </task>
+    </phase>
+
+    <phase name="documentation_configuration" order="5" estimated_days="1">
+      <description>Create documentation and configuration examples</description>
+      
+      <task id="16" priority="low" estimated_hours="2-3">
+        <title>Create example configuration files</title>
+        <description>Develop emcp_examples.yml with comprehensive configuration examples for both methods</description>
+        <acceptance_criteria>
+          <criterion>Examples for both eog_regression and gratton_coles methods</criterion>
+          <criterion>Different use case scenarios documented</criterion>
+          <criterion>Parameter explanations and recommendations</criterion>
+          <criterion>Integration with existing config patterns</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>8</task_id>
+        </dependencies>
+      </task>
+
+      <task id="17" priority="low" estimated_hours="2">
+        <title>Update CLAUDE.md documentation</title>
+        <description>Add remove_blinks_emcp stage documentation to CLAUDE.md</description>
+        <acceptance_criteria>
+          <criterion>Stage description and usage examples added</criterion>
+          <criterion>Method comparison and recommendations</criterion>
+          <criterion>Configuration examples included</criterion>
+          <criterion>Integration with existing documentation structure</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>16</task_id>
+        </dependencies>
+      </task>
+
+      <task id="18" priority="low" estimated_hours="1-2">
+        <title>Add CLI help documentation</title>
+        <description>Update CLI help system to include remove_blinks_emcp stage information</description>
+        <acceptance_criteria>
+          <criterion>Stage appears in CLI help output</criterion>
+          <criterion>Method parameter documentation</criterion>
+          <criterion>Usage examples in help text</criterion>
+        </acceptance_criteria>
+        <dependencies>
+          <task_id>17</task_id>
+        </dependencies>
+      </task>
+    </phase>
+  </phases>
+
+  <notes>
+    <testing_setup>
+      <note>Use existing test_data directory structure for EMCP testing</note>
+      <note>Leverage mock EEG data generation for unit tests</note>
+      <note>Validate against MNE tutorial data for regression method</note>
+    </testing_setup>
+    <development_notes>
+      <note>Follow existing codebase patterns for error handling and logging</note>
+      <note>Ensure both methods generate compatible _emcp_metrics for quality tracking</note>
+      <note>Maintain backward compatibility where possible during artifact.py updates</note>
+      <note>Use type hints consistently throughout implementation</note>
+    </development_notes>
+    <implementation_priority>
+      <note>Focus on core implementation (Phase 1-2) first for basic functionality</note>
+      <note>Quality control integration (Phase 3) can be developed in parallel</note>
+      <note>Testing (Phase 4) should validate each phase incrementally</note>
+      <note>Documentation (Phase 5) can be completed after core functionality</note>
+    </implementation_priority>
+  </notes>
+</task_list>

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<claude_command>
+  <metadata>
+    <name>create_prd</name>
+    <version>2.0</version>
+    <description>Generate Product Requirements Document with structured clarification process</description>
+    <target_environment>claude_code</target_environment>
+  </metadata>
+
+  <execution>
+    <phase name="clarification" required="true">
+      <description>Gather requirements through targeted questions</description>
+      <questions>
+        <category name="problem_definition">
+          <question>What problem does this feature solve for the user?</question>
+          <question>What is the main goal we want to achieve?</question>
+        </category>
+        <category name="user_context">
+          <question>Who is the primary user of this feature?</question>
+          <question>What is their technical background?</question>
+        </category>
+        <category name="functionality">
+          <question>Can you describe the key actions a user should perform?</question>
+          <question>Could you provide 2-3 user stories in format: "As a [user], I want to [action] so that [benefit]"?</question>
+        </category>
+        <category name="scope">
+          <question>What are the key success criteria?</question>
+          <question>Are there specific things this feature should NOT do?</question>
+        </category>
+        <category name="technical">
+          <question>What data does this feature need to display or manipulate?</question>
+          <question>Are there existing design mockups or UI guidelines?</question>
+          <question>Any potential edge cases or error conditions to consider?</question>
+        </category>
+      </questions>
+    </phase>
+
+    <phase name="generation" depends_on="clarification">
+      <description>Generate structured PRD based on gathered information</description>
+      <template>
+        <section name="introduction">
+          <content>Brief feature description and problem statement</content>
+        </section>
+        <section name="goals">
+          <content>Specific, measurable objectives</content>
+        </section>
+        <section name="user_stories">
+          <content>Detailed user narratives with benefits</content>
+        </section>
+        <section name="functional_requirements">
+          <content>Numbered list of specific functionalities (clear, unambiguous language)</content>
+        </section>
+        <section name="non_goals">
+          <content>Explicit scope limitations</content>
+        </section>
+        <section name="design_considerations" optional="true">
+          <content>UI/UX requirements, mockup references, component specifications</content>
+        </section>
+        <section name="technical_considerations" optional="true">
+          <content>Known constraints, dependencies, integration points</content>
+        </section>
+        <section name="success_metrics">
+          <content>Measurable success criteria</content>
+        </section>
+        <section name="open_questions">
+          <content>Remaining clarifications needed</content>
+        </section>
+      </template>
+    </phase>
+  </execution>
+
+  <output>
+    <file>
+      <path>tasks/prd-{feature-name}.md</path>
+      <format>markdown</format>
+      <target_audience>junior_developer</target_audience>
+    </file>
+  </output>
+
+  <behavior>
+    <rule>Do NOT start implementing the PRD</rule>
+    <rule>Ask clarifying questions before generation</rule>
+    <rule>Use clear, jargon-free language for junior developers</rule>
+    <rule>Ensure requirements are explicit and unambiguous</rule>
+  </behavior>
+
+  <usage_example>
+    <command>create_prd</command>
+    <input>I want to build a user authentication system with social login</input>
+    <expected_flow>
+      1. Ask clarification questions about auth providers, user data, security requirements
+      2. Generate structured PRD based on answers
+      3. Save as tasks/prd-user-authentication.md
+    </expected_flow>
+  </usage_example>
+</claude_command>

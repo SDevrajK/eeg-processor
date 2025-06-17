@@ -54,32 +54,45 @@ source .venv/Scripts/activate
 # Alternative: Use venv Python directly
 .venv/Scripts/python.exe -m black src/ tests/
 
-# Format code
+# Format code (includes import sorting with isort profile)
 python3 -m black src/ tests/
+python3 -m isort src/ tests/
 
 # Lint code
 python3 -m flake8 src/
 
-# Type checking
+# Type checking (strict mode enabled)
 python3 -m mypy src/
 
-# Run all pre-commit checks
+# Run all pre-commit checks (includes pytest)
 pre-commit run --all-files
+
+# Coverage reporting
+python3 -m pytest --cov=src --cov-report=html tests/
 ```
 
 ### CLI Usage
 ```bash
 # Process data with configuration
-eeg-processor process config/params.yml
+eeg-processor process config/processing_params.yml
 
-# Validate configuration
-eeg-processor validate config/params.yml
+# Process specific participant only
+eeg-processor process config/processing_params.yml --participant sub-01
 
-# Generate quality reports
+# Validate configuration without processing
+eeg-processor validate config/processing_params.yml
+
+# Dry run - show what would be processed
+eeg-processor process config/processing_params.yml --dry-run
+
+# Generate quality reports from results
 eeg-processor quality-report results/
 
 # Interactive data exploration
-eeg-processor explore config/params.yml sub-01
+eeg-processor explore config/processing_params.yml sub-01
+
+# Process specific stages only
+eeg-processor process config/processing_params.yml --stages "filter,rereference,epoch"
 ```
 
 ## Architecture Overview
@@ -96,7 +109,7 @@ eeg-processor explore config/params.yml sub-01
 
 **State Management** (`src/eeg_processor/state_management/`): Handles data flow between processing stages and manages participant data.
 
-**Configuration System** (`src/eeg_processor/utils/config_loader.py`): YAML-based configuration with validation and type-safe parameter management using PipelineConfig dataclass.
+**Configuration System** (`src/eeg_processor/utils/config_loader.py`): YAML-based configuration with validation and type-safe parameter management using PipelineConfig dataclass. Supports both simple and detailed participant formats with backward compatibility.
 
 ### Key Design Patterns
 
@@ -105,15 +118,50 @@ eeg-processor explore config/params.yml sub-01
 - **Memory-Efficient**: Careful memory management with garbage collection between participants
 - **Quality-First**: Built-in quality tracking and reporting throughout the pipeline
 - **Dual-Mode Operation**: Support for both batch processing and interactive exploration
+- **Unicode Path Handling**: Automatic Unicode normalization for cross-platform compatibility
+- **Exception Hierarchy**: Structured error handling with custom exceptions (ConfigurationError, ValidationError, etc.)
 
 ## Configuration
 
-The system uses YAML configuration files with comprehensive validation. Key configuration areas:
+The system uses YAML configuration files with comprehensive validation through the PipelineConfig dataclass. Key configuration areas:
 
-- **Data paths**: Input/output directory specification
-- **Processing parameters**: Filtering, artifact removal (ICA, ASR), epoching settings
-- **Quality control**: Thresholds and reporting options
-- **Dataset organization**: Optional dataset names for multi-study projects
+- **Data paths**: Input/output directory specification with `raw_data_dir` and `results_dir`
+- **Participants**: Support for both simple string lists and detailed participant dictionaries
+- **Processing stages**: Ordered list of processing operations (filter, rereference, artifact removal, epoching, etc.)
+- **Conditions**: Event-related condition definitions with markers and timing
+- **Study info**: Metadata for the experiment or dataset
+- **Output settings**: Control over intermediate file saving, figure formats, and directory structure
+- **Dataset organization**: Optional `dataset_name` for multi-study result organization
+
+### Configuration Structure Example
+```yaml
+raw_data_dir: "data/raw/"
+results_dir: "results/"
+file_extension: ".vhdr"
+dataset_name: "experiment_1"  # Optional - creates results/experiment_1/
+
+participants:
+  # Simple format
+  - "sub-01.vhdr"
+  - "sub-02.vhdr"
+  
+  # Or detailed format
+  sub-01:
+    file: "sub-01.vhdr"
+    conditions: ["baseline", "task"]
+
+stages:
+  - filter: {l_freq: 0.1, h_freq: 40}
+  - rereference: {method: "average"}
+  - remove_artifacts: {method: "ica"}
+  - epoch: {tmin: -0.2, tmax: 0.8}
+
+conditions:
+  - name: "Baseline"
+    condition_markers: [10, 20]
+  - name: "Task" 
+    condition_markers: [30, 40]
+```
 
 ## Testing Strategy
 
@@ -171,8 +219,34 @@ processing:
 ## Quality Control
 
 The system includes comprehensive quality control with:
-- Automatic tracking of processing metrics
-- HTML report generation with visualizations
-- Configurable quality thresholds
-- Both individual and group-level reporting
+- **Automatic tracking**: Processing metrics collected throughout the pipeline
+- **HTML report generation**: Interactive visualizations and statistics
+- **Quality flagging**: Configurable thresholds for automatic quality assessment
+- **Multi-level reporting**: Both individual participant and group-level summaries
 - **ASR-specific metrics**: Correlation preservation, variance changes, channel-wise corrections
+- **Pipeline detection**: Automatic detection of processing stages for report organization
+
+### Quality Control Components
+- **QualityTracker** (`quality_control/quality_tracker.py`): Central tracking system
+- **QualityReporter** (`quality_control/quality_reporter.py`): Report generation and aggregation
+- **HTMLGenerator** (`quality_control/quality_html_generator.py`): Interactive HTML report creation
+- **PlotGenerator** (`quality_control/quality_plot_generator.py`): Visualization generation
+- **QualityFlagging** (`quality_control/quality_flagging.py`): Automated quality assessment
+
+## Memory Management
+
+The pipeline includes sophisticated memory management:
+- **Memory pressure monitoring**: Real-time memory usage tracking via `get_memory_pressure()`
+- **Automatic garbage collection**: Between participants and processing stages
+- **Memory metrics**: Detailed reporting through `get_memory_metrics()`
+- **Efficient data handling**: Careful management of MNE objects and intermediate results
+
+## Utility Modules
+
+Key utility modules provide specialized functionality:
+- **BrainVision tools** (`utils/brainvision_tools.py`): BrainVision format handling
+- **Event parsers** (`utils/event_parsers.py`): Event marker parsing and validation
+- **ERP tools** (`utils/erp_tools.py`): Event-related potential analysis utilities
+- **Montage handling** (`utils/montages.py`): Electrode montage management
+- **Performance monitoring** (`utils/performance.py`): Processing time and resource tracking
+- **Interactive config** (`utils/interactive_config.py`): Dynamic configuration creation
