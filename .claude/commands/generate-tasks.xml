@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<claude_command>
+  <metadata>
+    <name>generate_tasks</name>
+    <version>2.0</version>
+    <description>Generate detailed task list from PRD with two-phase approach</description>
+    <target_environment>claude_code</target_environment>
+  </metadata>
+
+  <input>
+    <parameter name="prd_file" type="file_reference" required="true">
+      <description>Path to existing PRD markdown file</description>
+      <validation>Must be .md file in tasks/ directory</validation>
+    </parameter>
+  </input>
+
+  <execution>
+    <phase name="analysis" order="1">
+      <description>Analyze PRD and generate high-level tasks</description>
+      <actions>
+        <action>Read and parse the specified PRD file</action>
+        <action>Extract functional requirements and user stories</action>
+        <action>Identify 4-6 main implementation areas</action>
+        <action>Generate parent tasks without sub-tasks</action>
+        <action>Present to user for approval</action>
+      </actions>
+      <output_message>I have generated the high-level tasks based on the PRD. Ready to generate the sub-tasks? Respond with 'Go' to proceed.</output_message>
+    </phase>
+
+    <phase name="elaboration" order="2" trigger="user_confirmation">
+      <description>Break down parent tasks into actionable sub-tasks</description>
+      <wait_for>User response of "Go" or equivalent affirmation</wait_for>
+      <actions>
+        <action>For each parent task, create 2-5 specific sub-tasks</action>
+        <action>Ensure sub-tasks are actionable and complete the parent</action>
+        <action>Identify files that need creation or modification</action>
+        <action>Include corresponding test files</action>
+        <action>Generate final structured output</action>
+      </actions>
+    </phase>
+  </execution>
+
+  <output>
+    <file>
+      <path>docs/tasks/tasks-{prd-basename}.xml</path>
+      <format>xml</format>
+      <structure>
+        <root_element>task_list</root_element>
+        <metadata>
+          <project_name>EEG Processor</project_name>
+          <prd_source>{prd_file}</prd_source>
+          <generated_date>{current_date}</generated_date>
+          <estimated_duration>{total_estimated_days} days</estimated_duration>
+        </metadata>
+        <relevant_files>
+          <description>List of files to be created/modified with brief descriptions</description>
+          <include_tests>true</include_tests>
+          <format>
+            &lt;file action="create|modify" type="implementation|test|config"&gt;
+              &lt;path&gt;relative/path/to/file&lt;/path&gt;
+              &lt;description&gt;Brief description of file purpose&lt;/description&gt;
+            &lt;/file&gt;
+          </format>
+        </relevant_files>
+        <phases>
+          <description>Implementation phases with tasks</description>
+          <format>
+            &lt;phase name="phase_name" order="1" estimated_days="1-2"&gt;
+              &lt;description&gt;Phase description&lt;/description&gt;
+              &lt;task id="1" priority="high|medium|low" estimated_hours="2-4"&gt;
+                &lt;title&gt;Task title&lt;/title&gt;
+                &lt;description&gt;Detailed task description&lt;/description&gt;
+                &lt;acceptance_criteria&gt;
+                  &lt;criterion&gt;Specific criterion&lt;/criterion&gt;
+                &lt;/acceptance_criteria&gt;
+                &lt;dependencies&gt;
+                  &lt;task_id&gt;prerequisite_task_id&lt;/task_id&gt;
+                &lt;/dependencies&gt;
+              &lt;/task&gt;
+            &lt;/phase&gt;
+          </format>
+        </phases>
+        <notes>
+          <description>Testing instructions and setup notes</description>
+        </notes>
+      </structure>
+    </file>
+  </output>
+
+  <behavior>
+    <rule>Must pause after Phase 1 for user confirmation</rule>
+    <rule>Generate approximately 5 parent tasks</rule>
+    <rule>Each parent should have 2-5 actionable sub-tasks</rule>
+    <rule>Include test files alongside implementation files</rule>
+    <rule>Target junior developer comprehension level</rule>
+  </behavior>
+
+  <file_naming>
+    <pattern>tasks-{prd-file-basename}.xml</pattern>
+    <example>
+      <input>docs/PRD-Gratton-Coles-EMCP-Implementation.md</input>
+      <output>docs/tasks/tasks-PRD-Gratton-Coles-EMCP-Implementation.xml</output>
+    </example>
+  </file_naming>
+
+  <usage_example>
+    <command>generate_tasks --prd-file="docs/PRD-Gratton-Coles-EMCP-Implementation.md"</command>
+    <expected_flow>
+      1. Analyze PRD file
+      2. Generate 5 high-level implementation phases
+      3. Wait for "Go" confirmation
+      4. Generate detailed tasks with XML structure
+      5. Save as docs/tasks/tasks-PRD-Gratton-Coles-EMCP-Implementation.xml
+    </expected_flow>
+  </usage_example>
+</claude_command>

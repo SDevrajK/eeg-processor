@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<claude_command>
+  <metadata>
+    <n>process_task_list</n>
+    <version>2.0</version>
+    <description>Execute tasks one at a time with completion tracking and user approval</description>
+    <target_environment>claude_code</target_environment>
+  </metadata>
+
+  <input>
+    <parameter name="task_file" type="file_reference" required="true">
+      <description>Path to task list markdown file</description>
+      <validation>Must contain hierarchical task structure with checkboxes</validation>
+    </parameter>
+    <parameter name="start_task" type="string" optional="true">
+      <description>Specific task ID to start with (e.g., "1.1")</description>
+      <default>Next uncompleted sub-task</default>
+    </parameter>
+  </input>
+
+  <execution>
+    <workflow>
+      <step name="identify_next_task" order="1">
+        <description>Find the next uncompleted sub-task</description>
+        <logic>
+          <rule>Process sub-tasks in numerical order (1.1, 1.2, 2.1, etc.)</rule>
+          <rule>Skip completed tasks marked with [x]</rule>
+          <rule>If start_task specified, begin there</rule>
+        </logic>
+      </step>
+
+      <step name="execute_task" order="2">
+        <description>Implement the identified sub-task</description>
+        <actions>
+          <action>Implement the specific sub-task functionality</action>
+          <action>Create or modify relevant files</action>
+          <action>Ensure code quality and proper documentation</action>
+        </actions>
+      </step>
+
+      <step name="update_completion" order="3">
+        <description>Mark task as completed and update tracking</description>
+        <completion_protocol>
+          <rule>Mark completed sub-task: [ ] → [x]</rule>
+          <rule>If all sub-tasks under parent complete, mark parent: [ ] → [x]</rule>
+          <rule>Update task file immediately</rule>
+          <rule>Update "Relevant Files" section with any new/modified files</rule>
+        </completion_protocol>
+      </step>
+
+      <step name="request_approval" order="4">
+        <description>Pause for user review and approval</description>
+        <behavior>
+          <rule>MUST wait for user approval before next task</rule>
+          <rule>Accept "yes", "y", "continue", "next" as approval</rule>
+          <rule>If user provides feedback, address before proceeding</rule>
+          <rule>Do NOT start next sub-task without explicit permission</rule>
+        </behavior>
+      </step>
+    </workflow>
+
+    <loop>
+      <condition>While uncompleted sub-tasks exist AND user approves continuation</condition>
+      <break_conditions>
+        <condition>All tasks completed</condition>
+        <condition>User requests pause</condition>
+        <condition>Blocking issue encountered</condition>
+      </break_conditions>
+    </loop>
+  </execution>
+
+  <task_maintenance>
+    <file_updates>
+      <action>Update task completion status in real-time</action>
+      <action>Maintain "Relevant Files" section accuracy</action>
+      <action>Add newly discovered tasks as needed</action>
+    </file_updates>
+    
+    <relevant_files_format>
+      <entry>
+        <pattern>`path/to/file.ext` - Brief description of purpose</pattern>
+        <include_tests>Always include corresponding test files</include_tests>
+      </entry>
+    </relevant_files_format>
+  </task_maintenance>
+
+  <behavior>
+    <rule>ONE sub-task at a time - never start next without approval</rule>
+    <rule>Immediately mark completed tasks with [x]</rule>
+    <rule>Update parent task when all children complete</rule>
+    <rule>Maintain file tracking throughout process</rule>
+    <rule>Stop and wait after each sub-task completion</rule>
+  </behavior>
+
+  <error_handling>
+    <scenario name="blocking_issue">
+      <action>Document the blocker in task notes</action>
+      <action>Mark task as "🚫 Blocked" instead of completed</action>
+      <action>Suggest next steps or alternatives</action>
+    </scenario>
+    
+    <scenario name="task_unclear">
+      <action>Request clarification from user</action>
+      <action>Do not guess or assume requirements</action>
+      <action>Wait for clear direction before proceeding</action>
+    </scenario>
+  </error_handling>
+
+  <usage_example>
+    <command>process_task_list tasks-prd-user-auth.md</command>
+    <expected_flow>
+      1. Find next uncompleted sub-task (e.g., 1.1)
+      2. Implement the sub-task
+      3. Mark as completed [x] and update file
+      4. Wait for user "yes" to continue
+      5. Repeat for next sub-task
+    </expected_flow>
+  </usage_example>
+
+  <completion_indicators>
+    <sub_task>Change [ ] to [x] when implementation finished</sub_task>
+    <parent_task>Change [ ] to [x] when ALL children are [x]</parent_task>
+    <project>All parent tasks marked [x]</project>
+  </completion_indicators>
+</claude_command>
