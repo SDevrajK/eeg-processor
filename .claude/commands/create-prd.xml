@@ -88,7 +88,7 @@
     <command>create_prd</command>
     <input>I want to build a user authentication system with social login</input>
     <expected_flow>
-      1. Ask clarification questions about auth providers, user data, security requirements
+      1. Ask clarification questions about backwards compatibility, implementation, error handling, and testing
       2. Generate structured PRD based on answers
       3. Save as tasks/prd-user-authentication.md
     </expected_flow>

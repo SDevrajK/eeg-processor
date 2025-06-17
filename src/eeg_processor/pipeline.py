@@ -48,15 +48,15 @@ class EEGPipeline:
         """Load configuration and setup pipeline components"""
         self.config = load_config(config_path)
         self.participant_handler = ParticipantHandler(self.config)
-        self.result_saver = ResultSaver(self.config.processed_dir)
+        self.result_saver = ResultSaver(self.config.results_dir)
 
         # Initialize quality tracker
-        self.quality_tracker = QualityTracker(self.config.processed_dir)
+        self.quality_tracker = QualityTracker(self.config.results_dir)
 
         # Log configuration details
         if self.config.dataset_name:
             logger.info(f"Configuration loaded: {len(self.config.participants)} participants for dataset '{self.config.dataset_name}'")
-            logger.info(f"Results will be saved to: {self.config.processed_dir}")
+            logger.info(f"Results will be saved to: {self.config.results_dir}")
         else:
             logger.info(f"Configuration loaded: {len(self.config.participants)} participants")
         
@@ -318,7 +318,7 @@ class EEGPipeline:
             from .quality_control.quality_reporter import generate_quality_reports
 
             # Generate reports from the saved metrics
-            summary_path, participant_paths = generate_quality_reports(self.config.reports_dir or self.config.processed_dir)
+            summary_path, participant_paths = generate_quality_reports(self.config.results_dir)
 
             logger.success(f"Quality reports generated:")
             logger.success(f"  Summary report: {summary_path}")

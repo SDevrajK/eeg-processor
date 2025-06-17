@@ -23,7 +23,9 @@ class DataProcessor:
             "compute_eog": self._compute_eog,
             "detect_bad_channels": self._detect_bad_channels,
             "rereference": self._rereference,
-            "blink_artifact": self._remove_artifacts,
+            "remove_artifacts": self._remove_artifacts,
+            "clean_rawdata_asr": self._clean_rawdata_asr,
+            "blink_artifact": self._remove_artifacts,  # Legacy alias
 
             # Condition handling
             "segment_condition": self._segment_condition,
@@ -137,14 +139,40 @@ class DataProcessor:
         """Artifact removal with inplace parameter passed to external function"""
         if method == "ica":
             from ..processing.ica import remove_artifacts_ica
-
             return remove_artifacts_ica(raw=data, inplace=inplace, **kwargs)
         elif method == "regression":
             # Keep for backward compatibility but recommend ICA
             logger.warning("Regression method is deprecated. Consider using ICA method instead.")
             raise NotImplementedError("Regression method currently unavailable")
         else:
-            raise ValueError(f"Unknown artifact removal method: {method}")
+            raise ValueError(f"Unknown artifact removal method: {method}. Available: 'ica', 'regression'")
+
+    def _clean_rawdata_asr(self, data: BaseRaw,
+                           cutoff: Union[int, float] = 20,
+                           method: str = "euclid",
+                           calibration_duration: Optional[float] = None,
+                           inplace: bool = False,
+                           **kwargs) -> BaseRaw:
+        """ASR data cleaning with inplace parameter passed to external function
+        
+        ASR (Artifact Subspace Reconstruction) is designed as an intermediate cleaning step
+        between bad channel detection and ICA. It corrects transient high-amplitude artifacts
+        while preserving brain signals.
+        
+        Recommended pipeline order:
+        1. detect_bad_channels (+ interpolate)
+        2. clean_rawdata_asr  ← This step
+        3. remove_artifacts (ICA)
+        """
+        from ..processing.artifact import clean_rawdata_asr
+        return clean_rawdata_asr(
+            raw=data, 
+            cutoff=cutoff, 
+            method=method, 
+            calibration_duration=calibration_duration,
+            inplace=inplace, 
+            **kwargs
+        )
 
     ## --- Condition Handling --- ##
 
@@ -155,6 +183,10 @@ class DataProcessor:
         """Condition segmentation with inplace parameter passed to external function"""
         if not self.current_condition:
             raise ValueError("Condition must be set for segmentation")
+        
+        # Check if markers is None - prevent segmentation for conditions without markers
+        if self.current_condition.get('markers') is None:
+            raise ValueError("segment_condition cannot be used with conditions that have markers: None")
 
         from ..utils.raw_data_tools import segment_by_condition_markers
         return segment_by_condition_markers(

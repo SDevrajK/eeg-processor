@@ -4,7 +4,7 @@ from .base import FileLoader
 from loguru import logger
 import numpy as np
 
-class FifLoader(FileLoader):
+class FIFLoader(FileLoader):
     """Handler for FIFF (.fif) files"""
 
     @classmethod
@@ -45,4 +45,4 @@ class FifLoader(FileLoader):
 
 # Convenience function for backward compatibility
 def load_fif_file(file_path: Path, **kwargs) -> BaseRaw:
-    return FifLoader.load(file_path, **kwargs)
+    return FIFLoader.load(file_path, **kwargs)
