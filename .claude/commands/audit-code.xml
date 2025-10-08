@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<claude_command>
+  <metadata>
+    <name>audit_code</name>
+    <version>1.0</version>
+    <description>Audit research code for best practices, reproducibility, and quality issues</description>
+    <target_environment>claude_code</target_environment>
+  </metadata>
+
+  <input>
+    <parameter name="directory" type="string" optional="true" default=".">
+      <description>Directory path to audit (defaults to current directory)</description>
+      <validation>Must be a valid directory path</validation>
+    </parameter>
+  </input>
+
+  <execution>
+    <phase name="discovery" order="1">
+      <description>Scan directory structure and identify code files</description>
+      <actions>
+        <action>Recursively scan directory for Python files (.py, .ipynb)</action>
+        <action>Identify configuration files, requirements files, documentation</action>
+        <action>Catalog project structure and file organization</action>
+        <action>Generate file inventory with brief descriptions</action>
+      </actions>
+    </phase>
+
+    <phase name="code_analysis" order="2">
+      <description>Analyze code quality and research best practices</description>
+      <analysis_categories>
+        <category name="reproducibility">
+          <checks>
+            <check>Random seed usage and documentation</check>
+            <check>Hardcoded file paths vs configurable paths</check>
+            <check>Environment/dependency specification</check>
+            <check>Parameter documentation and default values</check>
+            <check>Version control presence (.git, .gitignore)</check>
+          </checks>
+        </category>
+        <category name="code_quality">
+          <checks>
+            <check>Function and variable naming conventions</check>
+            <check>Docstring presence and quality</check>
+            <check>Error handling and validation</check>
+            <check>Code organization and modularity</check>
+            <check>Import organization and unused imports</check>
+            <check>Type hints usage</check>
+          </checks>
+        </category>
+        <category name="research_practices">
+          <checks>
+            <check>Data validation and quality checks</check>
+            <check>Statistical assumption documentation</check>
+            <check>Analysis parameter tracking</check>
+            <check>Intermediate result saving/checkpointing</check>
+            <check>Figure/plot generation reproducibility</check>
+            <check>Results export and formatting</check>
+          </checks>
+        </category>
+        <category name="documentation">
+          <checks>
+            <check>README file presence and completeness</check>
+            <check>Installation/setup instructions</check>
+            <check>Usage examples and tutorials</check>
+            <check>Method/algorithm documentation</check>
+            <check>Citation and reference information</check>
+          </checks>
+        </category>
+        <category name="testing">
+          <checks>
+            <check>Test file presence and coverage</check>
+            <check>Data validation tests</check>
+            <check>Statistical method validation</check>
+            <check>Example data and expected outputs</check>
+          </checks>
+        </category>
+      </analysis_categories>
+    </phase>
+
+    <phase name="report_generation" order="3">
+      <description>Generate comprehensive audit report with recommendations</description>
+      <actions>
+        <action>Compile findings by category with severity levels</action>
+        <action>Provide specific recommendations for improvements</action>
+        <action>Suggest modernization opportunities</action>
+        <action>Generate action items prioritized by impact</action>
+      </actions>
+    </phase>
+  </execution>
+
+  <output>
+    <file>
+      <path>{directory}/audit-report-{timestamp}.md</path>
+      <format>markdown</format>
+      <structure>
+        <section name="executive_summary">
+          <content>Overall code quality score and key findings</content>
+        </section>
+        <section name="file_inventory">
+          <content>Catalog of all analyzed files with descriptions</content>
+        </section>
+        <section name="reproducibility_analysis">
+          <content>Issues affecting research reproducibility</content>
+        </section>
+        <section name="code_quality_findings">
+          <content>Code style, organization, and maintainability issues</content>
+        </section>
+        <section name="research_practices_review">
+          <content>Research-specific best practices compliance</content>
+        </section>
+        <section name="documentation_assessment">
+          <content>Documentation completeness and quality</content>
+        </section>
+        <section name="testing_coverage">
+          <content>Test coverage and validation practices</content>
+        </section>
+        <section name="recommendations">
+          <content>Prioritized action items for improvement</content>
+          <subsection name="high_priority">Critical issues requiring immediate attention</subsection>
+          <subsection name="medium_priority">Important improvements for code quality</subsection>
+          <subsection name="low_priority">Nice-to-have enhancements</subsection>
+        </section>
+        <section name="modernization_opportunities">
+          <content>Suggestions for updating to modern practices</content>
+        </section>
+      </structure>
+    </file>
+  </output>
+
+  <severity_levels>
+    <level name="critical">
+      <description>Issues that prevent reproducibility or cause errors</description>
+      <examples>Missing random seeds, hardcoded paths, broken imports</examples>
+    </level>
+    <level name="warning">
+      <description>Issues that impact code quality or maintainability</description>
+      <examples>Missing docstrings, poor naming, no error handling</examples>
+    </level>
+    <level name="suggestion">
+      <description>Opportunities for improvement or modernization</description>
+      <examples>Add type hints, improve documentation, refactor for clarity</examples>
+    </level>
+  </severity_levels>
+
+  <behavior>
+    <rule>Analyze all Python files (.py and .ipynb) recursively</rule>
+    <rule>Focus on research-specific best practices</rule>
+    <rule>Provide actionable recommendations with examples</rule>
+    <rule>Consider both code quality and scientific reproducibility</rule>
+    <rule>Generate clear, prioritized action items</rule>
+    <rule>Include positive findings alongside issues</rule>
+  </behavior>
+
+  <usage_example>
+    <command>audit_code /path/to/research/project</command>
+    <expected_flow>
+      1. Scan /path/to/research/project for Python files and documentation
+      2. Analyze code for reproducibility, quality, and research best practices
+      3. Generate comprehensive audit report with findings and recommendations
+      4. Save as /path/to/research/project/audit-report-{timestamp}.md
+    </expected_flow>
+  </usage_example>
+</claude_command>
