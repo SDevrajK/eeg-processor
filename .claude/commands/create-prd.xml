@@ -2,8 +2,8 @@
 <claude_command>
   <metadata>
     <name>create_prd</name>
-    <version>2.0</version>
-    <description>Generate Product Requirements Document with structured clarification process</description>
+    <version>2.1</version>
+    <description>Generate Product Requirements Document with structured clarification process - Research Enhanced</description>
     <target_environment>claude_code</target_environment>
   </metadata>
 
@@ -29,8 +29,43 @@
         </category>
         <category name="technical">
           <question>What data does this feature need to display or manipulate?</question>
-          <question>Are there existing design mockups or UI guidelines?</question>
+          <question>What parts of the existing codebase will need to be used?</question>
           <question>Any potential edge cases or error conditions to consider?</question>
+        </category>
+        <category name="data_requirements" context="processing_tools">
+          <question>What file formats and data structures will this feature work with?</question>
+          <question>What are typical dataset sizes and memory requirements?</question>
+          <question>Are there specific data validation or preprocessing needs?</question>
+        </category>
+        <category name="scientific_validity" context="processing_tools">
+          <question>What scientific assumptions does this method make?</question>
+          <question>Are there known limitations or constraints that should be documented?</question>
+          <question>How should edge cases or invalid data be handled scientifically?</question>
+        </category>
+        <category name="performance_considerations" context="processing_tools">
+          <question>What are the computational complexity requirements?</question>
+          <question>Are there memory or processing time constraints for typical research datasets?</question>
+          <question>Should this feature support batch processing or parallel execution?</question>
+        </category>
+        <category name="analysis_methodology" context="dataset_analysis">
+          <question>What statistical methods or algorithms need to be implemented?</question>
+          <question>Are there specific mathematical formulations or references to follow?</question>
+          <question>What are the key parameters and their expected ranges?</question>
+        </category>
+        <category name="data_exploration" context="dataset_analysis">
+          <question>What preliminary analyses or visualizations are needed?</question>
+          <question>What data quality checks should be performed?</question>
+          <question>Are there specific exploratory plots or summary statistics required?</question>
+        </category>
+        <category name="reproducibility_requirements" context="dataset_analysis">
+          <question>What elements need to be tracked for reproducibility (random seeds, versions, parameters)?</question>
+          <question>How should analysis parameters and settings be logged?</question>
+          <question>Are there specific documentation or metadata requirements?</question>
+        </category>
+        <category name="output_requirements" context="dataset_analysis">
+          <question>What figures, plots, or visualizations should be generated?</question>
+          <question>What tables, reports, or summary files are needed?</question>
+          <question>Are there specific export formats or file naming conventions?</question>
         </category>
       </questions>
     </phase>
@@ -53,11 +88,20 @@
         <section name="non_goals">
           <content>Explicit scope limitations</content>
         </section>
+        <section name="data_specifications" optional="true" context="data_heavy">
+          <content>File formats, data structures, validation requirements, performance constraints</content>
+        </section>
+        <section name="analysis_specifications" optional="true" context="dataset_analysis">
+          <content>Statistical methods, algorithms, parameters, reproducibility requirements</content>
+        </section>
         <section name="design_considerations" optional="true">
           <content>UI/UX requirements, mockup references, component specifications</content>
         </section>
         <section name="technical_considerations" optional="true">
-          <content>Known constraints, dependencies, integration points</content>
+          <content>Known constraints, dependencies, integration points, scientific validity considerations</content>
+        </section>
+        <section name="output_specifications" optional="true" context="dataset_analysis">
+          <content>Required figures, reports, exports, file formats, naming conventions</content>
         </section>
         <section name="success_metrics">
           <content>Measurable success criteria</content>
@@ -78,19 +122,21 @@
   </output>
 
   <behavior>
+    <rule>Give it your all</rule>
     <rule>Do NOT start implementing the PRD</rule>
     <rule>Ask clarifying questions before generation</rule>
     <rule>Use clear, jargon-free language for junior developers</rule>
     <rule>Ensure requirements are explicit and unambiguous</rule>
+    <rule>Include context-appropriate sections based on feature type</rule>
   </behavior>
 
   <usage_example>
     <command>create_prd</command>
-    <input>I want to build a user authentication system with social login</input>
+    <input>I want to build a signal filtering feature for EEG data processing</input>
     <expected_flow>
-      1. Ask clarification questions about backwards compatibility, implementation, error handling, and testing
-      2. Generate structured PRD based on answers
-      3. Save as tasks/prd-user-authentication.md
+      1. Ask clarification questions about data requirements, filtering methods, performance needs
+      2. Generate structured PRD based on answers with data and analysis specifications
+      3. Save as tasks/prd-eeg-signal-filtering.md
     </expected_flow>
   </usage_example>
 </claude_command>
