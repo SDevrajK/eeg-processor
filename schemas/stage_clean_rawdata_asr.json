@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_clean_rawdata_asr.json",
+  "title": "EEG Processor - clean_rawdata_asr Stage",
+  "description": "Clean raw EEG data using Artifact Subspace Reconstruction (ASR). ASR is an intermediate data cleaning step designed to be applied after bad channel detection/interpolation but before ICA. It identifies and corrects brief high-amplitude artifacts by reconstructing corrupted signal subspaces using a calibration-based approach. **Recommended Pipeline Position:** 1. Bad channel detection and interpolation 2. ASR data cleaning (this function) \u2190 Intermediate step 3. ICA artifact removal (for remaining component-based artifacts)",
+  "type": "object",
+  "properties": {
+    "cutoff": {
+      "type": "number",
+      "default": 20,
+      "minimum": 5,
+      "maximum": 100,
+      "description": "ASR cutoff parameter"
+    },
+    "method": {
+      "type": "string",
+      "default": "euclid",
+      "enum": [
+        "average",
+        "median",
+        "ica",
+        "euclid",
+        "riemann",
+        "eog_regression",
+        "gratton_coles"
+      ]
+    },
+    "blocksize": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "window_length": {
+      "type": "number",
+      "default": 0.5
+    },
+    "window_overlap": {
+      "type": "number",
+      "default": 0.66
+    },
+    "max_dropout_fraction": {
+      "type": "number",
+      "default": 0.1
+    },
+    "min_clean_fraction": {
+      "type": "number",
+      "default": 0.25
+    },
+    "calibration_duration": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "show_plot": {
+      "type": "boolean",
+      "default": false
+    },
+    "plot_duration": {
+      "type": "number",
+      "default": 10.0
+    },
+    "plot_start": {
+      "type": "number",
+      "default": 5.0
+    },
+    "verbose": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "examples": [
+    {
+      "cutoff": 20,
+      "method": "euclid"
+    },
+    {
+      "cutoff": 15,
+      "method": "riemann"
+    }
+  ],
+  "additionalProperties": false
+}

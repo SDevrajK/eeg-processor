@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_epoch.json",
+  "title": "EEG Processor - epoch Stage",
+  "description": "Create epochs from Raw data - always returns new Epochs object",
+  "type": "object",
+  "properties": {
+    "tmin": {
+      "type": "number",
+      "description": "Time in seconds",
+      "minimum": -10.0,
+      "maximum": 5.0
+    },
+    "tmax": {
+      "type": "number",
+      "description": "Time in seconds",
+      "minimum": 0.1,
+      "maximum": 60.0
+    },
+    "baseline": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "array",
+        "object",
+        "null"
+      ]
+    },
+    "reject_bad": {
+      "type": "boolean",
+      "default": true
+    },
+    "reject": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "flat": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "tmin",
+    "tmax",
+    "baseline"
+  ],
+  "examples": [
+    {
+      "tmin": -0.2,
+      "tmax": 0.8,
+      "baseline": [
+        -0.2,
+        0
+      ]
+    },
+    {
+      "tmin": -0.5,
+      "tmax": 2.0,
+      "baseline": null
+    }
+  ],
+  "additionalProperties": false
+}

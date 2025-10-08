@@ -70,6 +70,11 @@ python_classes = [
 python_functions = [
     "test_*",
 ]
+markers = [
+    "validation: marks tests as validation tests requiring external data",
+    "slow: marks tests as slow running",
+    "integration: marks tests as integration tests",
+]
 
 [tool.coverage.run]
 source = ["src"]

@@ -1,0 +1,214 @@
+# Minimal Processing Preset
+# Bare minimum processing for testing and quick analysis
+
+metadata:
+  name: "Minimal Processing"
+  description: "Minimal preprocessing pipeline with only essential steps: basic filtering and epoching. Ideal for testing, debugging, or when you want to handle most processing manually."
+  category: "basic"
+  version: "1.0.0"
+  author: "EEG Processor Team"
+  created: "2025-06-18"
+  tags:
+    - "minimal"
+    - "testing"
+    - "basic"
+    - "quick"
+    - "debugging"
+  use_cases:
+    - "Testing pipeline functionality"
+    - "Debugging configuration issues"
+    - "Quick data exploration"
+    - "Custom processing workflows"
+    - "Learning EEG processing steps"
+    - "High-quality data with minimal artifacts"
+  data_formats:
+    - "brainvision"
+    - "edf"
+    - "fif"
+    - "eeglab"
+    - "curry"
+    - "ant"
+    - "biosemi"
+  recommended_channels: "any"
+
+config_template:
+  # Study information
+  study:
+    name: "Minimal Processing Study"
+    description: "Quick processing with minimal preprocessing steps"
+    experimenter: ""
+
+  # Data paths
+  paths:
+    raw_data: ""
+    results: ""
+    file_extension: ".vhdr"
+
+  # Participants
+  participants: "auto"
+
+  # Minimal processing pipeline: Filter → Epoch
+  processing:
+    # 1. Basic filtering only
+    - filter:
+        l_freq: 0.1      # Minimal high-pass to remove DC offset
+        h_freq: 50.0     # Moderate low-pass to remove high-frequency noise
+        notch: null      # No notch filter
+        phase: "zero"    # Zero-phase filtering
+
+    # 2. Direct epoching without other preprocessing
+    - epoch:
+        tmin: -0.2       # Standard pre-stimulus window
+        tmax: 1.0        # Standard post-stimulus window  
+        baseline: [-0.2, 0]  # Basic baseline correction
+        reject: null     # No automatic rejection
+        preload: true    # Load into memory
+
+  # Minimal condition template
+  conditions:
+    - name: "All Events"
+      condition_markers: ["S1", "S2", 1, 2]  # Example markers
+      description: "All experimental events"
+
+  # Basic output settings
+  output:
+    save_intermediates: false
+    figure_format: "png"
+    dpi: 150
+    create_report: true
+
+# Documentation
+documentation:
+  overview: |
+    This preset provides the absolute minimum processing necessary to get from
+    raw EEG data to epoched data. It includes only:
+    
+    1. **Basic filtering**: Removes DC offset and high-frequency noise
+    2. **Epoching**: Extracts time-locked segments around events
+    
+    No artifact removal, bad channel detection, or re-referencing is performed.
+    This preset is ideal for:
+    - Testing pipeline functionality
+    - High-quality data that needs minimal processing
+    - Custom workflows where you want to add processing steps manually
+    - Learning and understanding individual processing steps
+
+  typical_use_cases:
+    - "Initial data exploration and visualization"
+    - "Testing event marker detection"
+    - "Debugging configuration files"
+    - "High-quality laboratory data"
+    - "Preprocessing validation"
+    - "Educational purposes"
+
+  parameter_explanations:
+    filtering:
+      l_freq: "0.1 Hz removes DC offset and very slow drifts"
+      h_freq: "50 Hz removes high-frequency noise while preserving most EEG"
+      notch: "null - no line noise removal (add manually if needed)"
+    
+    epoching:
+      tmin: "-0.2s provides basic baseline period"
+      tmax: "1.0s captures most ERP components"
+      baseline: "Simple pre-stimulus baseline correction"
+      reject: "null - no automatic artifact rejection"
+
+  when_to_use: |
+    Use this preset when:
+    - Data quality is very high with minimal artifacts
+    - You want to implement custom artifact removal
+    - Testing new analysis approaches
+    - Learning EEG processing step by step
+    - Quick exploratory data analysis
+    - Validating event timing and triggers
+
+  when_not_to_use: |
+    Avoid this preset when:
+    - Data has significant artifacts (use artifact-removal preset)
+    - Bad channels are present (add bad channel detection)
+    - Standard ERP analysis is needed (use basic-erp preset)
+    - Publication-quality results are required
+
+  expected_outputs:
+    - "Minimally filtered continuous data"
+    - "Basic epoched data"
+    - "Simple processing report"
+    - "Event detection summary"
+
+  troubleshooting:
+    too_much_noise: |
+      If data is too noisy after minimal processing:
+      - Add bad channel detection step
+      - Use more aggressive filtering
+      - Consider artifact removal methods
+      - Switch to basic-erp or artifact-removal preset
+    
+    missing_events: |
+      If epochs are empty or events missing:
+      - Check event marker names in conditions
+      - Verify trigger channel in raw data
+      - Use data exploration tools to identify markers
+    
+    baseline_issues: |
+      If baseline correction seems inadequate:
+      - Check baseline period for artifacts
+      - Consider longer or different baseline window
+      - Add high-pass filtering for better baseline stability
+
+# Simple configuration examples
+examples:
+  basic_usage: |
+    # Minimal configuration needed
+    paths:
+      raw_data_dir: "data/raw"
+      results_dir: "data/processed"
+      file_extension: ".vhdr"
+    
+    participants:
+      - "sub-01.vhdr"
+      - "sub-02.vhdr"
+    
+    conditions:
+      - name: "Stimulus"
+        condition_markers: ["S1", 1]
+
+  custom_filtering: |
+    # Add custom filtering parameters
+    stages:
+      - filter:
+          l_freq: 0.5    # Higher high-pass
+          h_freq: 40.0   # Lower low-pass
+          notch: 50      # Add notch filter
+      - epoch: {}        # Keep default epoching
+
+  longer_epochs: |
+    # Extend epoch window
+    stages:
+      - filter: {}       # Keep default filtering
+      - epoch:
+          tmin: -0.5
+          tmax: 2.0
+          baseline: [-0.5, -0.1]
+
+  no_baseline: |
+    # Skip baseline correction
+    stages:
+      - filter: {}
+      - epoch:
+          baseline: null  # No baseline correction
+
+  add_bad_channels: |
+    # Add bad channel detection to minimal preset
+    stages:
+      - filter: {}
+      - detect_bad_channels:  # Add this step
+          interpolate: true
+      - epoch: {}
+
+  add_rereference: |
+    # Add re-referencing to minimal preset
+    stages:
+      - filter: {}
+      - rereference:      # Add this step
+          method: "average"
+      - epoch: {}

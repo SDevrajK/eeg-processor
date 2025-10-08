@@ -69,8 +69,8 @@ def _correct_alternating_triggers(raw: BaseRaw,
         logger.warning("No events found in raw data - skipping trigger correction")
         return
 
-    # Extract epoch event codes from condition
-    epoch_events = condition.get("epoch_events", {})
+    # Extract epoch event codes from condition (check new 'triggers' format first)
+    epoch_events = condition.get("triggers", {}) or condition.get("epoch_events", {})
     if len(epoch_events) != 2:
         raise ValueError(f"Alternating correction requires exactly 2 epoch events, got {len(epoch_events)}")
 
@@ -99,8 +99,8 @@ def _correct_alternating_triggers(raw: BaseRaw,
     offset_code = get_event_id(condition_codes[1])  # Second event should be offset
     expected_codes = {onset_code, offset_code}
 
-    # Also include condition markers as valid (they shouldn't be corrected)
-    condition_markers = condition.get("condition_markers", [])
+    # Also include condition markers as valid (they shouldn't be corrected)  
+    condition_markers = condition.get("markers", []) or condition.get("condition_markers", [])
     if condition_markers:
         for marker in condition_markers:
             marker_id = get_event_id(marker)

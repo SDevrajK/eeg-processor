@@ -1,0 +1,1039 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stages.json",
+  "title": "EEG Processor Stages Schema",
+  "description": "Schema for processing stages configuration",
+  "definitions": {
+    "stage_item": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "crop",
+            "adjust_events",
+            "correct_triggers",
+            "filter",
+            "compute_eog",
+            "detect_bad_channels",
+            "rereference",
+            "remove_artifacts",
+            "remove_blinks_emcp",
+            "clean_rawdata_asr",
+            "segment_condition",
+            "epoch",
+            "time_frequency",
+            "time_frequency_raw",
+            "time_frequency_average",
+            "view"
+          ],
+          "description": "Stage name (uses default parameters)"
+        },
+        {
+          "type": "object",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "crop": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_crop.json",
+                      "title": "EEG Processor - crop Stage",
+                      "description": "Crop raw EEG data using either absolute times or event markers. Parameters ---------- crop_before : str | int | None Event code (e.g., 51, 'Stimulus/S 51', 'Stimulus/S  1') crop_after : str | int | None Event code to crop after last occurrence",
+                      "type": "object",
+                      "properties": {
+                        "t_min": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "t_max": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "crop_before": {
+                          "type": [
+                            "string",
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "crop_after": {
+                          "type": [
+                            "string",
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "segment_start": {
+                          "type": [
+                            "string",
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "segment_end": {
+                          "type": [
+                            "string",
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "show": {
+                          "type": "boolean"
+                        },
+                        "padded": {
+                          "type": "boolean",
+                          "default": true
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "adjust_events": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_adjust_events.json",
+                      "title": "EEG Processor - adjust_events Stage",
+                      "description": "Adjust event times with optional in-place operation",
+                      "type": "object",
+                      "properties": {
+                        "shift_ms": {
+                          "type": "number"
+                        },
+                        "target_events": {
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        },
+                        "protect_events": {
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "shift_ms"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "correct_triggers": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_correct_triggers.json",
+                      "title": "EEG Processor - correct_triggers Stage",
+                      "description": "Correct incorrectly coded triggers in EEG data.",
+                      "type": "object",
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "default": "alternating",
+                          "enum": [
+                            "average",
+                            "median",
+                            "ica",
+                            "euclid",
+                            "riemann",
+                            "eog_regression",
+                            "gratton_coles"
+                          ]
+                        },
+                        "corrupted_codes": {
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        },
+                        "auto_detect_corrupted": {
+                          "type": "boolean",
+                          "default": true
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "filter": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_filter.json",
+                      "title": "EEG Processor - filter Stage",
+                      "description": "Apply filtering with optional in-place operation",
+                      "type": "object",
+                      "properties": {
+                        "l_freq": {
+                          "type": "number",
+                          "minimum": 0.001,
+                          "maximum": 1000,
+                          "description": "Frequency in Hz"
+                        },
+                        "h_freq": {
+                          "type": "number",
+                          "minimum": 0.001,
+                          "maximum": 1000,
+                          "description": "Frequency in Hz"
+                        },
+                        "notch": {
+                          "type": [
+                            "boolean",
+                            "number",
+                            "array",
+                            "null"
+                          ],
+                          "oneOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "number",
+                              "minimum": 30,
+                              "maximum": 100,
+                              "description": "Notch frequency in Hz"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "number",
+                                "minimum": 30,
+                                "maximum": 100
+                              },
+                              "description": "Multiple notch frequencies"
+                            }
+                          ]
+                        }
+                      },
+                      "examples": [
+                        {
+                          "l_freq": 0.1,
+                          "h_freq": 40
+                        },
+                        {
+                          "l_freq": 1.0,
+                          "h_freq": 30,
+                          "notch": 50
+                        },
+                        {
+                          "h_freq": 40,
+                          "notch": [
+                            50,
+                            100
+                          ]
+                        }
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "compute_eog": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_compute_eog.json",
+                      "title": "EEG Processor - compute_eog Stage",
+                      "description": "Compute HEOG/VEOG from electrode pairs.",
+                      "type": "object",
+                      "properties": {
+                        "heog_pair": {
+                          "type": "null"
+                        },
+                        "veog_pair": {
+                          "type": "null"
+                        },
+                        "ch_names": {
+                          "type": "object",
+                          "default": "{'heog': 'HEOG', 'veog': 'VEOG'}"
+                        },
+                        "overwrite": {
+                          "type": "boolean",
+                          "default": false
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "detect_bad_channels": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_detect_bad_channels.json",
+                      "title": "EEG Processor - detect_bad_channels Stage",
+                      "description": "Detect and optionally interpolate bad channels using MNE's LOF method. Uses Local Outlier Factor to identify channels that are outliers compared to their spatial neighbors, avoiding false positives from physiological artifacts like eyeblinks.",
+                      "type": "object",
+                      "properties": {
+                        "n_neighbors": {
+                          "type": "integer",
+                          "default": 10,
+                          "minimum": 3,
+                          "maximum": 50,
+                          "description": "Number of neighboring channels"
+                        },
+                        "threshold": {
+                          "type": "number",
+                          "default": 1.5,
+                          "minimum": 0.1,
+                          "maximum": 10.0,
+                          "description": "Detection threshold"
+                        },
+                        "interpolate": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "verbose": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "show_plot": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "plot_duration": {
+                          "type": "number",
+                          "default": 2.0
+                        },
+                        "plot_start": {
+                          "type": "number",
+                          "default": 5.0
+                        }
+                      },
+                      "examples": [
+                        {
+                          "threshold": 1.5,
+                          "n_neighbors": 8
+                        },
+                        {
+                          "threshold": 2.0,
+                          "interpolate": true
+                        }
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "rereference": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_rereference.json",
+                      "title": "EEG Processor - rereference Stage",
+                      "description": "Apply rereferencing to raw EEG data with robust exclude handling. Preserves existing projections (e.g., for blink correction) while adding new reference.",
+                      "type": "object",
+                      "properties": {
+                        "method": {
+                          "type": "string",
+                          "default": "average",
+                          "enum": [
+                            "average",
+                            "median",
+                            "ica",
+                            "euclid",
+                            "riemann",
+                            "eog_regression",
+                            "gratton_coles"
+                          ]
+                        },
+                        "exclude": {
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        },
+                        "interpolate_bads": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "projection": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "verbose": {
+                          "type": "boolean",
+                          "default": false
+                        }
+                      },
+                      "examples": [
+                        {
+                          "method": "average"
+                        },
+                        {
+                          "method": "median"
+                        }
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "remove_artifacts": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_remove_artifacts.json",
+                      "title": "EEG Processor - remove_artifacts Stage",
+                      "description": "Remove artifacts using Independent Component Analysis (ICA). Combines automatic classification (ICALabel) with correlation-based detection to identify and remove eye blinks, muscle artifacts, cardiac artifacts, and line noise components.",
+                      "type": "object",
+                      "properties": {
+                        "n_components": {
+                          "type": [
+                            "number",
+                            "integer"
+                          ],
+                          "default": 15
+                        },
+                        "method": {
+                          "type": "string",
+                          "default": "infomax",
+                          "enum": [
+                            "average",
+                            "median",
+                            "ica",
+                            "euclid",
+                            "riemann",
+                            "eog_regression",
+                            "gratton_coles"
+                          ]
+                        },
+                        "eog_channels": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "default": "['VEOG', 'HEOG']"
+                        },
+                        "ecg_channels": {
+                          "type": [
+                            "array",
+                            "null"
+                          ]
+                        },
+                        "auto_classify": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "use_arci": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "muscle_threshold": {
+                          "type": "number",
+                          "default": 0.8
+                        },
+                        "eye_threshold": {
+                          "type": "number",
+                          "default": 0.8
+                        },
+                        "heart_threshold": {
+                          "type": "number",
+                          "default": 0.8
+                        },
+                        "line_noise_threshold": {
+                          "type": "number",
+                          "default": 0.8
+                        },
+                        "arci_cardiac_freq_range": {
+                          "type": "number",
+                          "default": "(0.6, 1.7)"
+                        },
+                        "arci_regularity_threshold": {
+                          "type": "number",
+                          "default": 0.4
+                        },
+                        "plot_components": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "enable_manual": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "decim": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "random_state": {
+                          "type": "integer",
+                          "default": 42
+                        },
+                        "verbose": {
+                          "type": [
+                            "boolean",
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "remove_blinks_emcp": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_remove_blinks_emcp.json",
+                      "title": "EEG Processor - remove_blinks_emcp Stage",
+                      "description": "Remove blink artifacts using MNE's EOGRegression method. This method uses MNE's EOGRegression class to identify and remove blink artifacts from EEG data. **IMPORTANT: For EEG data, apply the desired reference (typically average reference) before using this method, as recommended by MNE.**",
+                      "type": "object",
+                      "properties": {
+                        "eog_channels": {
+                          "type": "array",
+                          "default": "['HEOG', 'VEOG']"
+                        },
+                        "show_plot": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "plot_duration": {
+                          "type": "number",
+                          "default": 10.0
+                        },
+                        "plot_start": {
+                          "type": "number",
+                          "default": 5.0
+                        },
+                        "verbose": {
+                          "type": "boolean",
+                          "default": false
+                        }
+                      },
+                      "examples": [
+                        {
+                          "method": "eog_regression",
+                          "eog_channels": [
+                            "HEOG",
+                            "VEOG"
+                          ]
+                        },
+                        {
+                          "method": "gratton_coles",
+                          "eog_channels": [
+                            "HEOG"
+                          ],
+                          "subtract_evoked": true
+                        }
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "clean_rawdata_asr": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_clean_rawdata_asr.json",
+                      "title": "EEG Processor - clean_rawdata_asr Stage",
+                      "description": "Clean raw EEG data using Artifact Subspace Reconstruction (ASR). ASR is an intermediate data cleaning step designed to be applied after bad channel detection/interpolation but before ICA. It identifies and corrects brief high-amplitude artifacts by reconstructing corrupted signal subspaces using a calibration-based approach. **Recommended Pipeline Position:** 1. Bad channel detection and interpolation 2. ASR data cleaning (this function) \u2190 Intermediate step 3. ICA artifact removal (for remaining component-based artifacts)",
+                      "type": "object",
+                      "properties": {
+                        "cutoff": {
+                          "type": "number",
+                          "default": 20,
+                          "minimum": 5,
+                          "maximum": 100,
+                          "description": "ASR cutoff parameter"
+                        },
+                        "method": {
+                          "type": "string",
+                          "default": "euclid",
+                          "enum": [
+                            "average",
+                            "median",
+                            "ica",
+                            "euclid",
+                            "riemann",
+                            "eog_regression",
+                            "gratton_coles"
+                          ]
+                        },
+                        "blocksize": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "window_length": {
+                          "type": "number",
+                          "default": 0.5
+                        },
+                        "window_overlap": {
+                          "type": "number",
+                          "default": 0.66
+                        },
+                        "max_dropout_fraction": {
+                          "type": "number",
+                          "default": 0.1
+                        },
+                        "min_clean_fraction": {
+                          "type": "number",
+                          "default": 0.25
+                        },
+                        "calibration_duration": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "show_plot": {
+                          "type": "boolean",
+                          "default": false
+                        },
+                        "plot_duration": {
+                          "type": "number",
+                          "default": 10.0
+                        },
+                        "plot_start": {
+                          "type": "number",
+                          "default": 5.0
+                        },
+                        "verbose": {
+                          "type": "boolean",
+                          "default": false
+                        }
+                      },
+                      "examples": [
+                        {
+                          "cutoff": 20,
+                          "method": "euclid"
+                        },
+                        {
+                          "cutoff": 15,
+                          "method": "riemann"
+                        }
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "segment_condition": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_segment_condition.json",
+                      "title": "EEG Processor - segment_condition Stage",
+                      "description": "Segment Raw data based on condition markers with optional in-place operation",
+                      "type": "object",
+                      "properties": {
+                        "padding": {
+                          "type": "number",
+                          "default": 5.0
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "epoch": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_epoch.json",
+                      "title": "EEG Processor - epoch Stage",
+                      "description": "Create epochs from Raw data - always returns new Epochs object",
+                      "type": "object",
+                      "properties": {
+                        "tmin": {
+                          "type": "number",
+                          "description": "Time in seconds",
+                          "minimum": -10.0,
+                          "maximum": 5.0
+                        },
+                        "tmax": {
+                          "type": "number",
+                          "description": "Time in seconds",
+                          "minimum": 0.1,
+                          "maximum": 60.0
+                        },
+                        "baseline": {
+                          "type": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "array",
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "reject_bad": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "reject": {
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "flat": {
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "tmin",
+                        "tmax",
+                        "baseline"
+                      ],
+                      "examples": [
+                        {
+                          "tmin": -0.2,
+                          "tmax": 0.8,
+                          "baseline": [
+                            -0.2,
+                            0
+                          ]
+                        },
+                        {
+                          "tmin": -0.5,
+                          "tmax": 2.0,
+                          "baseline": null
+                        }
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "time_frequency": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_time_frequency.json",
+                      "title": "EEG Processor - time_frequency Stage",
+                      "description": "Compute averaged time-frequency representation from epochs",
+                      "type": "object",
+                      "properties": {
+                        "freq_range": {
+                          "type": "array",
+                          "default": "[1, 50]"
+                        },
+                        "n_freqs": {
+                          "type": "integer",
+                          "default": 100
+                        },
+                        "method": {
+                          "type": "string",
+                          "default": "morlet",
+                          "enum": [
+                            "average",
+                            "median",
+                            "ica",
+                            "euclid",
+                            "riemann",
+                            "eog_regression",
+                            "gratton_coles"
+                          ]
+                        },
+                        "n_cycles": {
+                          "type": [
+                            "number",
+                            "array"
+                          ]
+                        },
+                        "compute_itc": {
+                          "type": "boolean",
+                          "default": true
+                        },
+                        "baseline": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "baseline_mode": {
+                          "type": "string",
+                          "default": "percent"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "time_frequency_raw": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_time_frequency_raw.json",
+                      "title": "EEG Processor - time_frequency_raw Stage",
+                      "description": "Compute baseline power spectrum from continuous raw data",
+                      "type": "object",
+                      "properties": {
+                        "freq_range": {
+                          "type": "array",
+                          "default": "[1, 50]"
+                        },
+                        "n_freqs": {
+                          "type": "integer",
+                          "default": 20
+                        },
+                        "method": {
+                          "type": "string",
+                          "default": "welch",
+                          "enum": [
+                            "average",
+                            "median",
+                            "ica",
+                            "euclid",
+                            "riemann",
+                            "eog_regression",
+                            "gratton_coles"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "time_frequency_average": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_time_frequency_average.json",
+                      "title": "EEG Processor - time_frequency_average Stage",
+                      "description": "Convert RawTFR to AverageTFR by averaging across time dimension",
+                      "type": "object",
+                      "properties": {
+                        "raw_tfr": {
+                          "type": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "array",
+                            "object",
+                            "null"
+                          ]
+                        },
+                        "method": {
+                          "type": "string",
+                          "default": "mean",
+                          "enum": [
+                            "average",
+                            "median",
+                            "ica",
+                            "euclid",
+                            "riemann",
+                            "eog_regression",
+                            "gratton_coles"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "raw_tfr"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            },
+            {
+              "type": "object",
+              "properties": {
+                "view": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$schema": "http://json-schema.org/draft-07/schema#",
+                      "$id": "https://eeg-processor.org/schemas/stage_view.json",
+                      "title": "EEG Processor - view Stage",
+                      "description": "Unified plotting interface",
+                      "type": "object",
+                      "properties": {
+                        "stage_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "stage_name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1,
+              "maxProperties": 1
+            }
+          ],
+          "description": "Stage with custom parameters"
+        }
+      ]
+    }
+  }
+}

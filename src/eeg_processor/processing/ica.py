@@ -11,8 +11,11 @@ from loguru import logger
 from mne.io import BaseRaw
 from mne.preprocessing import ICA
 import matplotlib.pyplot as plt
+from ..utils.memory_tools import memory_profile, get_mne_object_memory
+from ..utils.performance import with_heartbeat
 
 
+@memory_profile
 def remove_artifacts_ica(
         raw: BaseRaw,
         n_components: Union[float, int] = 15,
@@ -102,6 +105,18 @@ def remove_artifacts_ica(
     logger.info(f"Applying ICA with {len(final_excludes)} excluded components: {sorted(final_excludes)}")
     cleaned_raw = ica.apply(raw, exclude=final_excludes)
 
+    # Analyze memory usage of data objects
+    input_memory = get_mne_object_memory(raw)
+    output_memory = get_mne_object_memory(cleaned_raw)
+    ica_memory = {
+        'object_type': 'ICA',
+        'n_components': ica.n_components_,
+        'mixing_matrix_mb': (ica.mixing_.nbytes / (1024 * 1024)) if hasattr(ica, 'mixing_') and ica.mixing_ is not None else 0,
+        'unmixing_matrix_mb': (ica.unmixing_.nbytes / (1024 * 1024)) if hasattr(ica, 'unmixing_') and ica.unmixing_ is not None else 0,
+        'total_mb': 0
+    }
+    ica_memory['total_mb'] = ica_memory['mixing_matrix_mb'] + ica_memory['unmixing_matrix_mb']
+
     # Store comprehensive metrics for quality tracking
     cleaned_raw._ica_metrics = {
         'n_components_fitted': ica.n_components_,
@@ -119,6 +134,13 @@ def remove_artifacts_ica(
         },
         'explained_variance': getattr(ica, 'pca_explained_variance_', None),
         'method': method,
+        'memory_analysis': {
+            'input_data_memory': input_memory,
+            'output_data_memory': output_memory,
+            'ica_object_memory': ica_memory,
+            'memory_efficiency': output_memory['total_mb'] / input_memory['total_mb'] if input_memory['total_mb'] > 0 else 1.0,
+            'ica_overhead_ratio': ica_memory['total_mb'] / input_memory['total_mb'] if input_memory['total_mb'] > 0 else 0
+        },
         'parameters': {
             'n_components': n_components,
             'muscle_threshold': muscle_threshold,
@@ -132,11 +154,22 @@ def remove_artifacts_ica(
             'random_state': random_state
         }
     }
+    
+    # Log memory analysis
+    logger.info(f"ICA Memory Analysis:")
+    logger.info(f"  Input data: {input_memory['total_mb']:.1f} MB ({input_memory['data_shape']})")
+    logger.info(f"  Output data: {output_memory['total_mb']:.1f} MB ({output_memory['data_shape']})")
+    logger.info(f"  ICA matrices: {ica_memory['total_mb']:.1f} MB")
+    logger.info(f"  Memory efficiency: {cleaned_raw._ica_metrics['memory_analysis']['memory_efficiency']:.3f}")
+    
+    if ica_memory['total_mb'] > 100:  # > 100MB for ICA matrices
+        logger.warning(f"Large ICA memory footprint: {ica_memory['total_mb']:.1f} MB - consider reducing n_components")
 
     logger.success(f"ICA cleaning completed. Excluded {len(final_excludes)} components.")
     return cleaned_raw
 
 
+@memory_profile
 def _fit_ica(
         raw: BaseRaw,
         n_components: Union[float, int],
@@ -155,9 +188,26 @@ def _fit_ica(
         verbose=verbose
     )
 
+    # Check preload status
+    logger.debug(f"  Preload status: {raw.preload}")
+    logger.debug(f"  Data shape: {raw._data.shape if hasattr(raw, '_data') and raw._data is not None else 'No _data attribute'}")
+    
     logger.info("Fitting ICA...")
-    ica.fit(raw, decim=decim)
-    logger.success(f"ICA fitted with {ica.n_components_} components")
+    try:
+        # Wrap ica.fit with heartbeat decorator for progress monitoring
+        wrapped_fit = with_heartbeat(
+            interval=5, 
+            message=f"Fitting ICA with {n_components} components"
+        )(ica.fit)
+        # Fit the ICA
+        wrapped_fit(raw, decim=decim)
+        logger.success(f"ICA fitted with {ica.n_components_} components")
+    except Exception as e:
+        logger.error(f"ICA fit failed: {type(e).__name__}: {e}")
+        # Additional debugging on failure
+        if hasattr(raw, '_data') and raw._data is None:
+            logger.error("Raw._data is None - data not properly loaded")
+        raise
 
     return ica
 

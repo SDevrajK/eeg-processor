@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_time_frequency_average.json",
+  "title": "EEG Processor - time_frequency_average Stage",
+  "description": "Convert RawTFR to AverageTFR by averaging across time dimension",
+  "type": "object",
+  "properties": {
+    "raw_tfr": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "array",
+        "object",
+        "null"
+      ]
+    },
+    "method": {
+      "type": "string",
+      "default": "mean",
+      "enum": [
+        "average",
+        "median",
+        "ica",
+        "euclid",
+        "riemann",
+        "eog_regression",
+        "gratton_coles"
+      ]
+    }
+  },
+  "required": [
+    "raw_tfr"
+  ],
+  "additionalProperties": false
+}

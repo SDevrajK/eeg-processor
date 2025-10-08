@@ -6,6 +6,8 @@ import gc
 import functools
 import cProfile
 import pstats
+import threading
+import sys
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 import numpy as np
@@ -257,6 +259,95 @@ def memory_monitor(memory_limit: float = 0.9):
                 logger.error(f"MemoryError in {func.__name__} - forcing garbage collection")
                 gc.collect()
                 raise
+        
+        return wrapper
+    return decorator
+
+
+def with_heartbeat(interval: float = 5.0, message: str = "Processing"):
+    """Decorator that shows a spinning progress indicator for long-running functions.
+    
+    Displays a single-line progress indicator with elapsed time that updates at the
+    specified interval. Runs in a separate daemon thread to avoid interfering with
+    the main computation.
+    
+    Args:
+        interval: Update interval in seconds (default: 5.0)
+        message: Message to display (default: "Processing")
+        
+    Usage:
+        @with_heartbeat(interval=5, message="Computing ICA")
+        def compute_ica(data):
+            # Long computation
+            pass
+            
+        # Or wrap external functions:
+        wrapped_func = with_heartbeat()(external_package.slow_function)
+        result = wrapped_func(data)
+    """
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Event to signal the heartbeat thread to stop
+            stop_event = threading.Event()
+            
+            # Spinner characters for visual feedback
+            spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+            spinner_idx = 0
+            
+            # Track start time
+            start_time = time.time()
+            
+            def heartbeat_thread():
+                """Thread function that displays the heartbeat."""
+                nonlocal spinner_idx
+                
+                # Wait a moment to let the function print its initial messages
+                time.sleep(0.1)
+                
+                # Add newline before starting heartbeat to avoid line conflicts
+                sys.stdout.write('\n')
+                sys.stdout.flush()
+                
+                while not stop_event.is_set():
+                    elapsed = time.time() - start_time
+                    mins, secs = divmod(int(elapsed), 60)
+                    time_str = f"{mins:02d}:{secs:02d}"
+                    
+                    # Create progress message
+                    spinner = spinner_chars[spinner_idx % len(spinner_chars)]
+                    progress_msg = f"\r{spinner} {message}... [{time_str}]"
+                    
+                    # Write to stdout and flush
+                    sys.stdout.write(progress_msg)
+                    sys.stdout.flush()
+                    
+                    spinner_idx += 1
+                    
+                    # Wait for interval or until stop event
+                    if stop_event.wait(interval):
+                        break
+                
+                # Clear the line and move to new line when done
+                sys.stdout.write('\r' + ' ' * 80 + '\r')
+                sys.stdout.flush()
+            
+            # Start heartbeat thread
+            heartbeat = threading.Thread(target=heartbeat_thread, daemon=True)
+            heartbeat.start()
+            
+            try:
+                # Execute the wrapped function
+                result = func(*args, **kwargs)
+                return result
+            finally:
+                # Stop heartbeat thread
+                stop_event.set()
+                heartbeat.join(timeout=1.0)  # Wait max 1 second for thread to finish
+                
+                # Log completion
+                elapsed = time.time() - start_time
+                logger.debug(f"{func.__name__} completed in {elapsed:.2f}s")
         
         return wrapper
     return decorator

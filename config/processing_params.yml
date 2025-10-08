@@ -1,4 +1,4 @@
-filtering:
+iltering:
   highpass: 0.1
   lowpass: 40
   notch: 50

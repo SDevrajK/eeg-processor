@@ -1,0 +1,460 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="7d4fae13-bf32-4a7e-a972-46a8b083c287" name="Changes" comment="Fixed data quality tracking and reporting so it works but is still ugly">
+      <change afterPath="$PROJECT_DIR$/.claude/commands/audit-code.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/commands/scaffold-project.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/commands/create-prd.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/create-prd.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/commands/generate-tasks.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/generate-tasks.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/commands/process-task-list.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/process-task-list.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/processing_params.yml" beforeDir="false" afterPath="$PROJECT_DIR$/config/processing_params.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/setup.py" beforeDir="false" afterPath="$PROJECT_DIR$/setup.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/cli.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/file_io/fif.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/file_io/fif.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/artifact.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/artifact.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/bad_channels.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/bad_channels.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/epoching.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/epoching.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/time_frequency.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/time_frequency.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/pipeline_detector.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/pipeline_detector.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_flagging.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_flagging.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_html_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_html_generator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_reporter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_reporter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_tracker.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_tracker.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/state_management/data_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/state_management/data_processor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/state_management/participant_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/state_management/participant_handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/analysis_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/analysis_interface.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/config_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/config_loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/config_loader_new.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/correct_triggers.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/correct_triggers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/raw_data_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/raw_data_tools.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_config_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_config_loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_new_config.py" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Jupyter Notebook" />
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;SDevrajK&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/SDevrajK/eeg-processor.git&quot;,
+    &quot;accountId&quot;: &quot;76e52839-e144-48a2-9cd6-88de2b797f33&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
+  <component name="ProjectId" id="2wrdgJjUB7WTFORhj2NXVgYTLvd" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python tests.Python tests in test_config_loader_fixed.py.executor": "Run",
+    "Python tests.Python tests in test_emcp_validation.py.executor": "Run",
+    "Python.core.executor": "Run",
+    "Python.generate_mock_report.executor": "Run",
+    "Python.mne_testspace.executor": "Run",
+    "Python.run_baseline_analysis.executor": "Run",
+    "Python.run_continuous_tfr_analysis.executor": "Debug",
+    "Python.run_pipeline.executor": "Run",
+    "Python.run_test_pipeline (1).executor": "Run",
+    "Python.run_test_pipeline.executor": "Run",
+    "Python.test_grand_average.executor": "Run",
+    "Python.test_one_subject.executor": "Run",
+    "Python.test_script.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/sayee/Documents/Research/PythonCode/EEG_Processor/schemas/eeg_processor_config.json",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "settings.json.schema",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\tests\test_config" />
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\notebooks\exploration" />
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\src\eeg_processor\state_management" />
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\tests\test_analysis" />
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\src\eeg_processor\utils" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\.claude\commands" />
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\docs" />
+      <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\docs\tasks" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.run_test_pipeline (1)">
+    <configuration name="generate_mock_report" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="EEG_Processor" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests/test_analysis" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/test_analysis/generate_mock_report.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="run_test_pipeline (1)" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="EEG_Processor" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests/test_analysis" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/test_analysis/run_test_pipeline.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="run_test_pipeline" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="EEG_Processor" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests/test_analysis" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\tests\test_analysis\run_test_pipeline.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Python tests in C:/Users/sayee/Documents/Research/PythonCode/EEG_Processor/tests/test_config_loader_fixed.py" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="EEG_Processor" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="Python 3.12 (EEG_Processor)" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;$PROJECT_DIR$/tests/test_config_loader_fixed.py&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Python tests in test_emcp_validation.py" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="EEG_Processor" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;$PROJECT_DIR$/tests/test_emcp_validation.py&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.generate_mock_report" />
+      <item itemvalue="Python.run_test_pipeline (1)" />
+      <item itemvalue="Python.run_test_pipeline" />
+      <item itemvalue="Python tests.Python tests in test_emcp_validation.py" />
+      <item itemvalue="Python tests.Python tests in C:/Users/sayee/Documents/Research/PythonCode/EEG_Processor/tests/test_config_loader_fixed.py" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.run_test_pipeline (1)" />
+        <item itemvalue="Python tests.Python tests in test_emcp_validation.py" />
+        <item itemvalue="Python tests.Python tests in C:/Users/sayee/Documents/Research/PythonCode/EEG_Processor/tests/test_config_loader_fixed.py" />
+        <item itemvalue="Python.generate_mock_report" />
+        <item itemvalue="Python.run_test_pipeline" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-deb605915726-JavaScript-PY-243.22562.220" />
+        <option value="bundled-python-sdk-0fc6c617c4bd-9a18a617cbe4-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.22562.220" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="7d4fae13-bf32-4a7e-a972-46a8b083c287" name="Changes" comment="" />
+      <created>1746803737254</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1746803737254</updated>
+      <workItem from="1746803738291" duration="45773000" />
+      <workItem from="1746970645966" duration="7520000" />
+      <workItem from="1746983237786" duration="9271000" />
+      <workItem from="1747057992504" duration="19830000" />
+      <workItem from="1747167095833" duration="22726000" />
+      <workItem from="1747200178574" duration="1031000" />
+      <workItem from="1747233871662" duration="38910000" />
+      <workItem from="1747600340772" duration="53237000" />
+      <workItem from="1747849630790" duration="118000" />
+      <workItem from="1747951103260" duration="12034000" />
+      <workItem from="1748187769014" duration="48560000" />
+      <workItem from="1748380310656" duration="11678000" />
+      <workItem from="1748533222738" duration="1715000" />
+      <workItem from="1748534964080" duration="1615000" />
+      <workItem from="1748537598170" duration="870000" />
+      <workItem from="1748540315316" duration="81000" />
+      <workItem from="1748541740049" duration="50000" />
+      <workItem from="1748542278587" duration="6838000" />
+      <workItem from="1748553324387" duration="7494000" />
+      <workItem from="1748612239746" duration="4046000" />
+      <workItem from="1748634310078" duration="685000" />
+      <workItem from="1748701256777" duration="10075000" />
+      <workItem from="1748871637359" duration="19118000" />
+      <workItem from="1749141893257" duration="7000" />
+      <workItem from="1749317906109" duration="7367000" />
+      <workItem from="1749502041326" duration="4631000" />
+      <workItem from="1750020874711" duration="56323000" />
+      <workItem from="1750263217599" duration="12200000" />
+      <workItem from="1750295461094" duration="27939000" />
+    </task>
+    <task id="LOCAL-00001" summary="Large Push, added time-frequency, many other things.">
+      <option name="closed" value="true" />
+      <created>1748537484560</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1748537484560</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Fixed data quality tracking and reporting so it works but is still ugly">
+      <option name="closed" value="true" />
+      <created>1748612291223</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1748612291223</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Fixed data quality tracking and reporting so it works but is still ugly">
+      <option name="closed" value="true" />
+      <created>1749405327314</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1749405327314</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="origin/main" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Large Push, added time-frequency, many other things." />
+    <MESSAGE value="Fixed data quality tracking and reporting so it works but is still ugly" />
+    <option name="LAST_COMMIT_MESSAGE" value="Fixed data quality tracking and reporting so it works but is still ugly" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/tests/test_analysis/test_grand_average.py</url>
+          <line>71</line>
+          <option name="timeStamp" value="19" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/tests/test_analysis/test_one_subject.py</url>
+          <option name="timeStamp" value="20" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/tests/test_analysis/test_grand_average.py</url>
+          <line>41</line>
+          <option name="timeStamp" value="22" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/utils/analysis_interface.py</url>
+          <line>65</line>
+          <option name="timeStamp" value="99" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/utils/correct_triggers.py</url>
+          <line>65</line>
+          <option name="timeStamp" value="117" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/utils/correct_triggers.py</url>
+          <line>109</line>
+          <option name="timeStamp" value="118" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/utils/correct_triggers.py</url>
+          <line>135</line>
+          <option name="timeStamp" value="119" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/processing/bad_channels.py</url>
+          <line>66</line>
+          <option name="timeStamp" value="121" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/processing/bad_channels.py</url>
+          <line>74</line>
+          <option name="timeStamp" value="122" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/utils/quality_reporter.py</url>
+          <line>491</line>
+          <option name="timeStamp" value="133" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/eeg_processor/processing/time_frequency.py</url>
+          <line>82</line>
+          <option name="timeStamp" value="137" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/01_raw_inspection.ipynb</url>
+          <line>63</line>
+          <option name="timeStamp" value="45" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/01_raw_inspection.ipynb</url>
+          <line>76</line>
+          <option name="timeStamp" value="49" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/01_raw_inspection.ipynb</url>
+          <line>100</line>
+          <option name="timeStamp" value="51" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/01_raw_inspection.ipynb</url>
+          <line>127</line>
+          <option name="timeStamp" value="53" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/01_raw_inspection.ipynb</url>
+          <line>132</line>
+          <option name="timeStamp" value="58" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/RI_EEG_raw_inspection.ipynb</url>
+          <line>82</line>
+          <option name="timeStamp" value="59" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/RI_EEG_raw_inspection.ipynb</url>
+          <line>106</line>
+          <option name="timeStamp" value="61" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="jupyter-line">
+          <url>file://$PROJECT_DIR$/notebooks/exploration/01_raw_inspection.ipynb</url>
+          <line>44</line>
+          <option name="timeStamp" value="136" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/EEG_Processor$run_pipeline.coverage" NAME="run_test_pipeline Coverage Results" MODIFIED="1747191267512" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$run_test_pipeline__1_.coverage" NAME="run_test_pipeline (1) Coverage Results" MODIFIED="1749503033295" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$mne_testspace.coverage" NAME="mne_testspace Coverage Results" MODIFIED="1746980815103" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$test_script.coverage" NAME="test_script Coverage Results" MODIFIED="1747186482576" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$run_continuous_tfr_analysis.coverage" NAME="run_continuous_tfr_analysis Coverage Results" MODIFIED="1748563918106" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$.coverage" NAME=" Coverage Results" MODIFIED="1750164167604" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$test_grand_average.coverage" NAME="test_grand_average Coverage Results" MODIFIED="1747314788721" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$test_one_subject.coverage" NAME="test_one_subject Coverage Results" MODIFIED="1747595410392" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$run_baseline_analysis.coverage" NAME="run_baseline_analysis Coverage Results" MODIFIED="1748392126598" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$run_test_pipeline.coverage" NAME="run_test_pipeline Coverage Results" MODIFIED="1748916597176" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$core.coverage" NAME="core Coverage Results" MODIFIED="1746816937455" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src/eeg_processor" />
+    <SUITE FILE_PATH="coverage/EEG_Processor$generate_mock_report.coverage" NAME="generate_mock_report Coverage Results" MODIFIED="1748975833762" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests/test_analysis" />
+  </component>
+</project>

@@ -1,0 +1,361 @@
+# =============================================================================
+# EEG PROCESSOR - COMPREHENSIVE CONFIGURATION TEMPLATE
+# =============================================================================
+# 
+# This template provides a complete reference for all available processing 
+# stages and their parameters. Copy this file to create new configurations.
+#
+# Quick Start:
+# 1. Update the paths section with your data directories
+# 2. Update the participants section with your subject files
+# 3. Uncomment and configure the processing stages you need
+# 4. Validate with: eeg-processor validate your_config.yml
+#
+# For help: eeg-processor stages [stage_name]
+#
+# =============================================================================
+
+# =============================================================================
+# STUDY INFORMATION
+# =============================================================================
+study:
+  name: "My_EEG_Study"                    # Required: Your study name
+  dataset: "experiment1"                  # Optional: Dataset identifier for organizing results
+  description: "EEG data processing"      # Optional: Study description
+  researcher: "Your Lab"                  # Optional: Researcher/lab name
+
+# =============================================================================
+# DATA PATHS
+# =============================================================================
+# Update these paths to match your directory structure
+paths:
+  raw_data: "data/raw/"                   # Directory containing raw EEG files
+  results: "results/"                     # Where all outputs will be saved
+  file_extension: ".vhdr"                 # File extension (.vhdr, .edf, .fif, .set, etc.)
+
+# =============================================================================
+# PARTICIPANTS
+# =============================================================================
+# Choose ONE format below:
+
+# --- Option 1: Simple format (most common) ---
+participants:
+  - "sub-01.vhdr"                         # List your EEG files
+  - "sub-02.vhdr"
+  - "sub-03.vhdr"
+
+# --- Option 2: Detailed format with metadata ---
+# participants:
+#   sub-01:
+#     file: "sub-01.vhdr"
+#     age: 25
+#     gender: "F"
+#     group: "control"
+#     conditions: ["baseline", "task"]     # Optional: participant-specific conditions
+#   sub-02:
+#     file: "sub-02.vhdr"
+#     age: 30
+#     gender: "M"
+#     group: "experimental"
+
+# =============================================================================
+# EXPERIMENTAL CONDITIONS
+# =============================================================================
+# Define your experimental conditions and event markers
+# Two formats are supported:
+# 1. condition_markers: [marker1, marker2, ...] - for epoching
+# 2. markers: [start_marker, end_marker] - for segmentation with time windows
+
+conditions:
+  - name: "Baseline"
+    description: "Resting state condition"
+    condition_markers: [10, 11]           # Event codes for epoching
+
+  - name: "Task"
+    description: "Active task condition"
+    condition_markers: [20, 21, 22]
+
+  # - name: "Control"
+  #   description: "Control condition"
+  #   condition_markers: [30, 31]
+
+# --- Advanced: Segmentation with Time Windows ---
+# Use when triggers change during recording or you need to segment specific time ranges
+#
+# conditions:
+#   - name: "Early Phase"
+#     description: "First part of experiment"
+#     markers: [100, 199]                 # [start_marker, end_marker] for segmentation
+#     t_min: 0                            # Start searching from 0 seconds
+#     t_max: 300                          # Stop searching at 300 seconds (5 minutes)
+#
+#   - name: "Late Phase"
+#     description: "Second part of experiment"
+#     markers: [200, 299]                 # Different markers used later in recording
+#     t_min: 300                          # Start searching from 300 seconds
+#     t_max: 600                          # Stop searching at 600 seconds
+#
+#   - name: "Full Recording"
+#     description: "Condition using full recording"
+#     markers: [10, 19]                   # No t_min/t_max = search entire recording
+#
+# Time window parameters (optional):
+#   t_min: Start time in seconds (None = beginning of recording)
+#   t_max: End time in seconds (None = end of recording)
+#   markers: [start_marker, end_marker] - required for segmentation
+#   padding: Padding around segments in seconds (default: 5.0)
+
+# =============================================================================
+# PROCESSING PIPELINE
+# =============================================================================
+# Uncomment and configure the stages you need. Order matters!
+# Recommended order is provided below.
+
+processing:
+  # -------------------------------------------------------------------------
+  # DATA LOADING & INITIAL PROCESSING
+  # -------------------------------------------------------------------------
+  
+  # Raw data cropping (optional - use to reduce processing time)
+  # - crop:
+  #     tmin: 0                           # Start time (seconds)
+  #     tmax: 600                         # End time (seconds)
+
+  # Trigger/event correction (if needed)
+  # - correct_triggers:
+  #     method: "alternating"             # Method for trigger correction
+  
+  # Event time adjustment (if needed)
+  # - adjust_events:
+  #     shift_ms: 0                       # Time shift in milliseconds
+  #     target_events: []                 # Events to adjust (empty = all)
+  #     protect_events: []                # Events to leave unchanged
+
+  # -------------------------------------------------------------------------
+  # FILTERING - Apply early in pipeline
+  # -------------------------------------------------------------------------
+  
+  # Basic filtering (recommended as first processing step)
+  - filter:
+      l_freq: 0.1                         # High-pass filter (Hz) - removes slow drift
+      h_freq: 40                          # Low-pass filter (Hz) - removes high-freq noise
+      # notch: 50                         # Notch filter (Hz) - 50 for Europe, 60 for N.America
+      # notch: [50, 100]                  # Multiple notch frequencies
+
+  # -------------------------------------------------------------------------
+  # CHANNEL PROCESSING
+  # -------------------------------------------------------------------------
+  
+  # EOG channel computation (if you have electrode pairs)
+  # - compute_eog:
+  #     heog_pair: ["F9", "F10"]          # Horizontal EOG electrode pair
+  #     veog_pair: ["Fp1", "Fp2"]         # Vertical EOG electrode pair
+
+  # Bad channel detection and interpolation
+  - detect_bad_channels:
+      threshold: 2.0                      # LOF threshold (1.5-3.0, higher = more lenient)
+      n_neighbors: 10                     # Number of neighbors for outlier detection
+      interpolate: true                   # Automatically interpolate bad channels
+      # show_plot: false                  # Show before/after comparison
+      # plot_duration: 2.0                # Duration of comparison plot (seconds)
+      # verbose: false                    # Enable detailed logging
+
+  # -------------------------------------------------------------------------
+  # ARTIFACT REMOVAL - Choose and combine methods as needed
+  # -------------------------------------------------------------------------
+  
+  # Option A: ASR (Artifact Subspace Reconstruction) - Apply early for motion artifacts
+  # Good for removing brief high-amplitude artifacts while preserving brain signals
+  # - clean_rawdata_asr:
+  #     cutoff: 20                        # Sensitivity (10=strict, 30=lenient)
+  #     method: "euclid"                  # Distance metric: "euclid" or "riemann"
+  #     # calibration_duration: 60        # Duration for calibration (seconds, optional)
+  #     # show_plot: false                # Display before/after comparison
+  #     # verbose: false                  # Show detailed processing info
+  
+  # Option B: EMCP (Eye Movement Correction) - For blink artifacts
+  # Choose ONE of the two methods below:
+  
+  # B1: Gratton & Coles method (reference-agnostic - use BEFORE re-referencing)
+  # - remove_blinks_emcp:
+  #     method: "gratton_coles"           # Reference-agnostic method
+  #     eog_channels: ["HEOG", "VEOG"]    # EOG channel names (adjust to your data)
+  #     subtract_evoked: true             # Enhanced artifact removal
+  #     # show_plot: false                # Display before/after comparison
+  #     # verbose: false                  # Enable detailed logging
+  
+  # B2: EOG Regression method (standard approach - use AFTER re-referencing)
+  # - remove_blinks_emcp:
+  #     method: "eog_regression"          # MNE's standard EOG regression
+  #     eog_channels: ["HEOG", "VEOG"]    # EOG channel names (adjust to your data)
+  #     # show_plot: false                # Display before/after comparison
+  #     # verbose: false                  # Enable detailed logging
+
+  # -------------------------------------------------------------------------
+  # RE-REFERENCING - Apply after artifact removal
+  # -------------------------------------------------------------------------
+  
+  # Re-reference to average of all channels (most common)
+  - rereference:
+      method: "average"                   # Reference type
+      # exclude: ["HEOG", "VEOG"]         # Channels to exclude from reference
+      # interpolate_bads: true            # Interpolate bad channels before referencing
+      # verbose: false                    # Print logging messages
+
+  # Alternative re-referencing options:
+  # - rereference:
+  #     method: ["M1", "M2"]              # Reference to specific channels (mastoids)
+  # - rereference:
+  #     method: "REST"                    # Reference Electrode Standardization Technique
+
+  # -------------------------------------------------------------------------
+  # ICA ARTIFACT REMOVAL - Apply after re-referencing
+  # -------------------------------------------------------------------------
+  
+  # ICA for remaining artifacts (muscle, residual eye movements, etc.)
+  - remove_artifacts:
+      method: "ica"                       # Use Independent Component Analysis
+      n_components: 15                    # Number of components (auto if not specified)
+      # eog_channels: ["HEOG", "VEOG"]    # EOG channels for automatic classification
+      # ecg_channels: []                  # ECG channels (if available)
+      # auto_classify: false              # Enable ICALabel automatic classification
+      # muscle_threshold: 0.8             # Threshold for muscle artifact removal
+      # eye_threshold: 0.8                # Threshold for eye artifact removal
+      # heart_threshold: 0.8              # Threshold for cardiac artifact removal
+      # line_noise_threshold: 0.8         # Threshold for line noise removal
+      # plot_components: false            # Show component analysis plots
+      # enable_manual: false              # Allow manual component selection
+      # decim: null                       # Decimation for ICA fitting (speeds up processing)
+      # random_state: 42                  # Random seed for reproducibility
+
+  # -------------------------------------------------------------------------
+  # CONDITION SEGMENTATION (if needed)
+  # -------------------------------------------------------------------------
+  
+  # Segment data by condition markers (extract specific time periods)
+  # - segment_condition:
+  #     padding: 5.0                      # Padding around condition markers (seconds)
+
+  # -------------------------------------------------------------------------
+  # EPOCHING - Create epochs around events
+  # -------------------------------------------------------------------------
+  
+  # Create epochs for event-related analysis
+  - epoch:
+      tmin: -0.2                          # Start time before event (seconds)
+      tmax: 1.0                           # End time after event (seconds)
+      baseline: [-0.1, 0]                 # Baseline correction period
+      # reject:                           # Automatic epoch rejection thresholds
+      #   eeg: 100e-6                     # EEG threshold (100 µV)
+      #   eog: 300e-6                     # EOG threshold (300 µV)
+      # flat:                             # Flat signal detection thresholds
+      #   eeg: 5e-6                       # EEG flat threshold (5 µV)
+
+  # -------------------------------------------------------------------------
+  # TIME-FREQUENCY ANALYSIS (optional)
+  # -------------------------------------------------------------------------
+  
+  # Time-frequency analysis of epochs (creates averaged TFR)
+  # - time_frequency:
+  #     freq_range: [1, 50]               # Frequency range [min, max] in Hz
+  #     n_freqs: 100                      # Number of frequency points
+  #     method: "morlet"                  # Method: "morlet" or "multitaper"
+  #     # n_cycles: null                  # Cycles per frequency (auto if null)
+  #     # compute_itc: true               # Compute inter-trial coherence
+  #     # baseline: [-0.2, 0]             # Baseline period for TFR correction
+  #     # baseline_mode: "percent"        # Baseline correction mode
+
+  # Time-frequency analysis of raw data (baseline/continuous data)
+  # - time_frequency_raw:
+  #     freq_range: [1, 50]               # Frequency range [min, max] in Hz
+  #     n_freqs: 20                       # Number of frequency points
+  #     method: "welch"                   # Method: "welch", "multitaper", or "morlet"
+  #     output_type: "spectrum"           # "spectrum" or "raw_tfr"
+
+  # -------------------------------------------------------------------------
+  # VISUALIZATION (optional - for development/debugging)
+  # -------------------------------------------------------------------------
+  
+  # View data at any stage (useful for debugging)
+  # - view:
+  #     duration: 10.0                    # Duration to display (seconds)
+  #     n_channels: 20                    # Number of channels to show
+  #     title: "After filtering"          # Plot title
+
+# =============================================================================
+# OUTPUT SETTINGS
+# =============================================================================
+output:
+  save_intermediate: true                 # Save intermediate processing files
+  generate_plots: true                   # Generate quality control plots
+  quality_report: true                   # Generate comprehensive HTML quality report
+  file_format: "fif"                     # Output format: "fif", "edf", "mat", etc.
+
+# =============================================================================
+# CONFIGURATION NOTES & BEST PRACTICES
+# =============================================================================
+
+# PROCESSING ORDER RECOMMENDATIONS:
+# 1. filter (basic highpass/lowpass)
+# 2. detect_bad_channels (+ interpolation)
+# 3. clean_rawdata_asr (optional - for motion artifacts)
+# 4. remove_blinks_emcp (optional - for blink artifacts)
+#    - Use gratton_coles BEFORE re-referencing
+#    - Use eog_regression AFTER re-referencing
+# 5. rereference (typically to average)
+# 6. remove_artifacts (ICA for remaining artifacts)
+# 7. epoch (create epochs for analysis)
+# 8. time_frequency (optional analysis)
+
+# COMMON PROCESSING PIPELINES:
+
+# --- Basic ERP Pipeline ---
+# filter → detect_bad_channels → rereference → remove_artifacts → epoch
+
+# --- Advanced Artifact Removal Pipeline ---
+# filter → detect_bad_channels → clean_rawdata_asr → 
+# remove_blinks_emcp (gratton_coles) → rereference → remove_artifacts → epoch
+
+# --- Time-Frequency Analysis Pipeline ---
+# filter → detect_bad_channels → rereference → remove_artifacts → 
+# epoch → time_frequency
+
+# PARAMETER SELECTION TIPS:
+# - Start with default parameters and adjust based on your data quality
+# - Use show_plot: true during development to visualize processing effects
+# - Monitor quality reports to ensure processing is working correctly
+# - For noisy data: lower thresholds (more strict artifact removal)
+# - For clean data: higher thresholds (preserve more data)
+
+# TROUBLESHOOTING:
+# - If epochs are being rejected: check reject thresholds
+# - If bad channels aren't detected: lower the threshold parameter
+# - If too many channels marked as bad: increase the threshold parameter
+# - If ICA removes too much: increase component thresholds
+# - If artifacts remain: enable more aggressive artifact removal methods
+
+# FILE FORMAT COMPATIBILITY:
+# - BrainVision: .vhdr, .eeg, .vmrk files
+# - EDF/BDF: .edf, .bdf files  
+# - MNE-Python: .fif files
+# - EEGLAB: .set, .fdt files
+# - ANT: .cnt files
+# - Neuroscan: .cnt files
+
+# =============================================================================
+# OUTPUT SETTINGS (OPTIONAL)
+# =============================================================================
+# Control output file generation and formats
+output:
+  save_intermediates: false               # Save intermediate files (increases disk usage)
+  figure_format: "png"                    # Figure format: png, svg, pdf
+  dpi: 150                                # Figure resolution (dots per inch)
+  create_report: true                     # Generate quality control report
+  # n_jobs: 1                             # Number of parallel jobs (-1 for all cores)
+  # memory_limit_gb: 8                    # Memory limit in GB (optional)
+
+# For more help:
+# - Run: eeg-processor stages
+# - Run: eeg-processor stages [stage_name] 
+# - Run: eeg-processor validate your_config.yml
+# - Check documentation: docs/

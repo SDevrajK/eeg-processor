@@ -47,6 +47,7 @@ class PipelineDetector:
             'has_bad_channels': 'detect_bad_channels' in all_stages,
             'has_epoching': 'epoch' in all_stages,
             'has_ica': 'blink_artifact' in all_stages,
+            'has_emcp': 'remove_blinks_emcp' in all_stages,
             'has_filtering': 'filter' in all_stages,
             'has_asr': 'clean_rawdata_asr' in all_stages,
             'has_cropping': 'crop' in all_stages,
@@ -63,7 +64,8 @@ class PipelineDetector:
         # Log pipeline characteristics
         logger.info(f"Pipeline type: {pipeline_info['data_type']}")
         logger.info(f"Key stages: epoching={pipeline_info['has_epoching']}, "
-                   f"ICA={pipeline_info['has_ica']}, bad_channels={pipeline_info['has_bad_channels']}")
+                   f"ICA={pipeline_info['has_ica']}, EMCP={pipeline_info['has_emcp']}, "
+                   f"bad_channels={pipeline_info['has_bad_channels']}")
         
         return pipeline_info
     
@@ -89,6 +91,9 @@ class PipelineDetector:
         if self.pipeline_info['has_ica']:
             required_plots.append('ica_analysis')
             
+        if self.pipeline_info['has_emcp']:
+            required_plots.append('emcp_analysis')
+            
         if self.pipeline_info['has_asr']:
             required_plots.append('asr_analysis')
             
@@ -104,9 +109,9 @@ class PipelineDetector:
         """
         thresholds = {
             'bad_channels': {
-                'warning_percentage': 10.0,  # >10% of channels bad
-                'critical_percentage': 25.0,  # >25% of channels bad
-                'max_reasonable': 8  # >8 bad channels for typical 32-ch system
+                'warning_percentage': 20.0,  # >=20% of channels bad
+                'critical_percentage': 40.0,  # >=40% of channels bad
+                'max_reasonable': 8   # Legacy field for compatibility
             }
         }
         

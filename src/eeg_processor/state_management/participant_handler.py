@@ -112,12 +112,31 @@ class ParticipantHandler:
         return file_path
 
     def _find_matching_file(self, directory: Path, filename: str) -> Optional[Path]:
-        """Case-insensitive file search in directory"""
+        """Case-insensitive exact file search with duplicate detection for same extension"""
         target = filename.lower()
-        for f in directory.iterdir():
-            if f.name.lower() == target:
-                return f.resolve()
-        return None
+        matches = []
+        
+        # Search recursively for files with exact filename match (case-insensitive)
+        for file_path in directory.rglob("*"):
+            if file_path.is_file() and file_path.name.lower() == target:
+                matches.append(file_path)
+        
+        # Error only if multiple files have the same name AND same extension
+        if len(matches) > 1:
+            # Group by extension to check for true duplicates
+            by_extension = {}
+            for match in matches:
+                ext = match.suffix.lower()
+                if ext not in by_extension:
+                    by_extension[ext] = []
+                by_extension[ext].append(match)
+            
+            # Check if any extension has multiple files
+            for ext, files in by_extension.items():
+                if len(files) > 1:
+                    raise ValueError(f"Multiple files found with name '{filename}' and extension '{ext}': {files}")
+        
+        return matches[0].resolve() if matches else None
 
     def get_participant_by_id(self, participant_id: str) -> Optional[Participant]:
         """Get participant by ID"""

@@ -1,0 +1,265 @@
+# Comprehensive Artifact Removal Preset
+# Advanced pipeline combining ASR, EMCP, and ICA for robust artifact correction
+
+metadata:
+  name: "Comprehensive Artifact Removal"
+  description: "Advanced artifact removal pipeline combining Artifact Subspace Reconstruction (ASR), Eye Movement Correction Procedures (EMCP), and Independent Component Analysis (ICA). Ideal for noisy data or challenging recording environments."
+  category: "advanced"
+  version: "1.0.0"
+  author: "EEG Processor Team"
+  created: "2025-06-18"
+  tags:
+    - "artifact-removal"
+    - "asr"
+    - "emcp"
+    - "ica"
+    - "advanced"
+    - "robust"
+  use_cases:
+    - "Noisy recording environments"
+    - "Pediatric or clinical populations"
+    - "High-density EEG (64+ channels)"
+    - "Movement-prone experiments"
+    - "Data with excessive artifacts"
+    - "Challenging participant populations"
+  data_formats:
+    - "brainvision"
+    - "edf"
+    - "fif"
+    - "eeglab"
+    - "biosemi"
+  recommended_channels: "64+"
+
+config_template:
+  # Study information
+  study:
+    name: "Artifact Removal Study"
+    description: "Advanced artifact correction using ASR + EMCP + ICA pipeline"
+    experimenter: ""
+
+  # Data paths
+  paths:
+    raw_data: ""
+    results: ""
+    file_extension: ".vhdr"
+
+  # Participants
+  participants: "auto"
+
+  # Comprehensive artifact removal pipeline
+  processing:
+    # 1. Initial light filtering to stabilize data
+    - filter:
+        l_freq: 0.5     # Slightly higher high-pass for stability
+        h_freq: 100.0   # Higher low-pass to preserve more information for artifact detection
+        notch: null     # Will apply notch after artifact removal if needed
+
+    # 2. Detect bad channels before artifact removal
+    - detect_bad_channels:
+        threshold: 1.5
+        n_neighbors: 12     # Higher for dense arrays
+        interpolate: true
+        verbose: false
+        show_plot: false
+
+    # 3. ASR - Remove brief high-amplitude artifacts
+    - clean_rawdata_asr:
+        cutoff: 20          # Conservative setting (higher = less aggressive)
+        method: "euclid"    # Euclidean distance metric
+        calibration_duration: 60  # Use first 60s for calibration
+        show_plot: false    # No visualization in batch mode
+        verbose: false
+
+    # 4. EMCP - Eye movement correction (requires EOG channels)
+    - remove_blinks_emcp:
+        method: "eog_regression"  # Standard MNE approach
+        eog_channels: ["HEOG", "VEOG"]  # Must be customized for montage
+        subtract_evoked: false   # Keep for most applications
+        show_plot: false
+
+    # 5. Re-reference before ICA (important for optimal decomposition)
+    - rereference:
+        method: "average"
+        exclude: []
+
+    # 6. Additional filtering for ICA (removes very slow drifts)
+    - filter:
+        l_freq: 1.0      # Higher high-pass for ICA stability
+        h_freq: 40.0     # Standard low-pass for ERP analysis
+        notch: 50        # Add notch filter after artifact removal
+
+    # 7. ICA - Remove remaining component-based artifacts
+    - remove_artifacts:
+        method: "ica"
+        n_components: 0.95   # Keep 95% of variance
+        max_iter: 1000       # Sufficient iterations for convergence
+        random_state: 42     # Reproducible results
+        show_plots: false    # No interactive plots in batch mode
+
+    # 8. Final epoching after artifact removal
+    - epoch:
+        tmin: -0.2
+        tmax: 0.8
+        baseline: [-0.2, 0]
+        reject: null         # Rely on artifact removal rather than rejection
+        preload: true
+
+  # Example conditions (customize for experiment)
+  conditions:
+    - name: "Clean"
+      condition_markers: ["S1", 1]
+      description: "Cleaned condition"
+
+  # Output settings for artifact removal
+  output:
+    save_intermediates: true   # Save intermediate steps for QC
+    figure_format: "png"
+    dpi: 150
+    create_report: true
+
+# Advanced documentation
+documentation:
+  overview: |
+    This preset implements a comprehensive artifact removal pipeline that combines
+    three complementary methods:
+    
+    1. **ASR (Artifact Subspace Reconstruction)**: Removes brief, high-amplitude artifacts
+       while preserving brain signals. Applied early in the pipeline.
+    
+    2. **EMCP (Eye Movement Correction Procedures)**: Specifically targets blink and
+       eye movement artifacts using EOG channels.
+    
+    3. **ICA (Independent Component Analysis)**: Removes component-based artifacts
+       like muscle activity, residual eye movements, and cardiac artifacts.
+    
+    The pipeline is designed for challenging data where standard preprocessing
+    is insufficient.
+
+  typical_use_cases:
+    - "Clinical EEG with movement artifacts"
+    - "Pediatric populations with compliance issues"  
+    - "High-density recordings prone to more artifacts"
+    - "Experiments requiring minimal epoch rejection"
+    - "Noisy recording environments"
+    - "Long recording sessions with varying artifact levels"
+
+  parameter_explanations:
+    asr:
+      cutoff: "20 is conservative - reduces over-correction while removing major artifacts"
+      method: "euclid distance metric works well for most data types"
+      calibration_duration: "60s provides stable calibration for most recordings"
+    
+    emcp:
+      method: "eog_regression is robust and works with most montages"
+      eog_channels: "Must be customized for your electrode montage"
+      subtract_evoked: "false preserves stimulus-locked eye movement patterns"
+    
+    ica:
+      n_components: "0.95 retains most signal while removing noise components"
+      max_iter: "1000 ensures convergence for most datasets"
+      random_state: "Fixed seed for reproducible results"
+
+  processing_order: |
+    The order of artifact removal is critical:
+    
+    1. **Light filtering first**: Stabilizes data for artifact detection
+    2. **Bad channels early**: Prevents contamination of artifact correction
+    3. **ASR before EMCP**: Removes gross artifacts that could interfere with eye correction
+    4. **EMCP before ICA**: Reduces eye artifacts before component decomposition
+    5. **Re-reference before ICA**: Optimal for component separation
+    6. **Final filtering**: Clean up after artifact removal
+    7. **ICA last**: Handles remaining component-based artifacts
+    8. **Epoch after cleaning**: Maximizes usable data
+
+  expected_outputs:
+    - "ASR correction metrics and visualizations"
+    - "EMCP blink correction report"
+    - "ICA component classifications and removal log"
+    - "Before/after artifact removal comparisons" 
+    - "Detailed quality control report"
+    - "Processing time and memory usage statistics"
+
+  troubleshooting:
+    asr_overcorrection: |
+      If ASR removes too much signal:
+      - Increase cutoff (try 30-40)
+      - Check calibration period quality
+      - Ensure sufficient calibration duration
+    
+    emcp_failure: |
+      If EMCP fails or makes data worse:
+      - Verify EOG channel names match your montage
+      - Check EOG signal quality
+      - Consider skipping if EOG channels unavailable
+      - Try gratton_coles method as alternative
+    
+    ica_instability: |
+      If ICA fails to converge or produces poor results:
+      - Reduce n_components (try 0.9 or fixed number like 30)
+      - Increase max_iter (try 2000)
+      - Check data length (need >30s of clean data)
+      - Ensure proper filtering before ICA
+
+    memory_issues: |
+      For large datasets or limited memory:
+      - Process shorter data segments
+      - Reduce n_components for ICA
+      - Set save_intermediates to false
+      - Consider processing participants individually
+
+# Configuration examples
+examples:
+  standard_64ch: |
+    # Standard 64-channel configuration
+    paths:
+      raw_data_dir: "data/raw"
+      results_dir: "data/processed"
+      file_extension: ".vhdr"
+    
+    # Override EOG channels for standard 64-ch montage
+    stages:
+      - filter: {l_freq: 0.5, h_freq: 100.0}
+      - detect_bad_channels: {}
+      - clean_rawdata_asr: {}
+      - remove_blinks_emcp:
+          eog_channels: ["FP1", "FP2"]  # Use frontal electrodes as EOG
+      - rereference: {}
+      - filter: {l_freq: 1.0, h_freq: 40.0, notch: 50}
+      - remove_artifacts: {}
+      - epoch: {}
+
+  aggressive_cleaning: |
+    # More aggressive artifact removal for very noisy data
+    stages:
+      - filter: {}
+      - detect_bad_channels: {threshold: 1.2}  # More sensitive bad channel detection
+      - clean_rawdata_asr: {cutoff: 15}        # More aggressive ASR
+      - remove_blinks_emcp: {}
+      - rereference: {}
+      - filter: {}
+      - remove_artifacts: {n_components: 0.9}  # Remove more ICA components
+      - epoch: {}
+
+  conservative_cleaning: |
+    # Conservative artifact removal (preserve more signal)
+    stages:
+      - filter: {}
+      - detect_bad_channels: {threshold: 2.0}  # Less sensitive bad channel detection
+      - clean_rawdata_asr: {cutoff: 30}        # Less aggressive ASR
+      - remove_blinks_emcp: {}
+      - rereference: {}
+      - filter: {}
+      - remove_artifacts: {n_components: 0.98} # Preserve more components
+      - epoch: {}
+
+  no_eog_available: |
+    # Configuration when EOG channels are not available
+    stages:
+      - filter: {}
+      - detect_bad_channels: {}
+      - clean_rawdata_asr: {}
+      # Skip EMCP step
+      - rereference: {}
+      - filter: {}
+      - remove_artifacts: {}  # ICA will handle eye artifacts
+      - epoch: {}

@@ -1,0 +1,98 @@
+# ========================================
+# EEG PROCESSOR CONFIGURATION
+# ========================================
+# Generated from preset: Basic ERP Processing
+# Description: A straightforward pipeline for ERP analysis including filtering, bad channel detection, re-referencing, and epoching. Suitable for most standard ERP experiments with 32+ channels.
+# Version: 1.0.0
+#
+# REQUIRED CUSTOMIZATIONS:
+#   1. Set your data paths below
+#   2. List your participant files
+#   3. Define your experimental conditions
+#
+# ========================================
+
+# ========================================
+# STUDY INFORMATION
+# ========================================
+study:
+  description: Basic ERP analysis using standard preprocessing pipeline
+  experimenter: ''
+  name: ERP Study
+
+# ========================================
+# DATA PATHS (REQUIRED - CUSTOMIZE THESE)
+# ========================================
+paths:
+  raw_data_dir: ""  # REQUIRED: Path to your raw EEG files
+  results_dir: ""   # REQUIRED: Where to save processed data
+  file_extension: ".vhdr"
+
+# ========================================
+# PARTICIPANTS (REQUIRED - CUSTOMIZE THIS)
+# ========================================
+# List your participant files or use 'auto' to process all files
+# Examples:
+#   - sub-01.vhdr
+#   - sub-02.vhdr
+# Or simply use: auto
+participants: auto
+
+# ========================================
+# PROCESSING PIPELINE - BASIC ERP PROCESSING
+# ========================================
+# Processing stages in order - each stage processes the output of the previous
+stages:
+- filter:
+    filter_length: auto
+    h_freq: 40.0
+    l_freq: 0.1
+    notch: null
+    phase: zero
+- detect_bad_channels:
+    interpolate: true
+    n_neighbors: 10
+    show_plot: false
+    threshold: 1.5
+    verbose: false
+- rereference:
+    exclude: []
+    method: average
+- epoch:
+    baseline:
+    - -0.2
+    - 0
+    preload: true
+    reject: null
+    tmax: 0.8
+    tmin: -0.2
+
+# ========================================
+# EXPERIMENTAL CONDITIONS (REQUIRED - CUSTOMIZE)
+# ========================================
+# Define your experimental conditions and their event markers
+# Replace the example markers below with your actual experiment markers
+conditions:
+- condition_markers:
+  - S1
+  - S11
+  - 1
+  - 11
+  description: Standard stimuli
+  name: Standard
+- condition_markers:
+  - S2
+  - S12
+  - 2
+  - 12
+  description: Target stimuli
+  name: Target
+
+# ========================================
+# OUTPUT SETTINGS (OPTIONAL)
+# ========================================
+output:
+  create_report: true
+  dpi: 150
+  figure_format: png
+  save_intermediates: false

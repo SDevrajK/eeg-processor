@@ -1,0 +1,196 @@
+# Basic ERP Processing Preset
+# A simple, robust pipeline for event-related potential analysis
+
+metadata:
+  name: "Basic ERP Processing"
+  description: "A straightforward pipeline for ERP analysis including filtering, bad channel detection, re-referencing, and epoching. Suitable for most standard ERP experiments with 32+ channels."
+  category: "basic"
+  version: "1.0.0"
+  author: "EEG Processor Team"
+  created: "2025-06-18"
+  tags:
+    - "erp"
+    - "basic"
+    - "event-related"
+    - "beginner-friendly"
+  use_cases:
+    - "P300 oddball experiments"
+    - "N400 language studies"
+    - "Visual/auditory ERP paradigms"
+    - "Standard cognitive neuroscience experiments"
+    - "Undergraduate/graduate research projects"
+  data_formats:
+    - "brainvision"
+    - "edf"
+    - "fif"
+    - "eeglab"
+  recommended_channels: "32+"
+
+config_template:
+  # Study information template
+  study:
+    name: "ERP Study"
+    description: "Basic ERP analysis using standard preprocessing pipeline"
+    experimenter: ""
+
+  # Data paths (must be provided by user)
+  paths:
+    raw_data: ""  # User must specify
+    results: ""   # User must specify  
+    file_extension: ".vhdr"  # Default for BrainVision
+
+  # Participants (user must provide or use 'auto')
+  participants: "auto"
+
+  # Core processing pipeline: Filter → Bad channels → Re-reference → Epoch
+  processing:
+    # 1. Bandpass filtering (0.1-40 Hz standard for ERP)
+    - filter:
+        l_freq: 0.1    # High-pass to remove slow drifts
+        h_freq: 40.0   # Low-pass to remove high-frequency noise
+        notch: null    # No notch filter by default (can be added if needed)
+        filter_length: "auto"
+        phase: "zero"  # Zero-phase filtering to preserve timing
+
+    # 2. Bad channel detection and interpolation
+    - detect_bad_channels:
+        threshold: 1.5      # Conservative threshold (fewer false positives)
+        n_neighbors: 10     # Appropriate for 32+ channel systems
+        interpolate: true   # Automatically interpolate detected bad channels
+        verbose: false      # Reduce console output
+        show_plot: false    # No plots in batch processing
+
+    # 3. Re-referencing to average reference
+    - rereference:
+        method: "average"   # Most common choice for ERP analysis
+        exclude: []         # Don't exclude any channels (bad channels already handled)
+
+    # 4. Epoching around events
+    - epoch:
+        tmin: -0.2         # 200ms pre-stimulus baseline
+        tmax: 0.8          # 800ms post-stimulus (covers most ERP components)
+        baseline: [-0.2, 0] # Baseline correction using pre-stimulus period
+        reject: null       # No automatic rejection (can be added if needed)
+        preload: true      # Load epochs into memory for faster processing
+
+  # Experimental conditions template (user must customize)
+  conditions:
+    - name: "Standard"
+      condition_markers: ["S1", "S11", 1, 11]  # Example markers
+      description: "Standard stimuli"
+    
+    - name: "Target" 
+      condition_markers: ["S2", "S12", 2, 12]  # Example markers
+      description: "Target stimuli"
+
+  # Output settings
+  output:
+    save_intermediates: false  # Don't save intermediate files by default
+    figure_format: "png"       # PNG format for figures
+    dpi: 150                   # Good quality for viewing
+    create_report: true        # Generate quality control report
+
+# Documentation and usage examples
+documentation:
+  overview: |
+    This preset implements a standard ERP preprocessing pipeline suitable for most 
+    cognitive neuroscience experiments. The pipeline follows established best practices:
+    
+    1. **Filtering**: 0.1-40 Hz bandpass removes slow drifts and high-frequency noise
+    2. **Bad channel detection**: LOF method identifies and interpolates problematic channels
+    3. **Re-referencing**: Average reference is standard for ERP analysis
+    4. **Epoching**: -200 to +800ms window captures most ERP components
+    
+  typical_use_cases:
+    - "Oddball paradigms (P300, MMN)"
+    - "Language experiments (N400, P600)" 
+    - "Attention studies (N2pc, P1/N1)"
+    - "Memory experiments (DM effects)"
+    - "Social cognition (EPN, LPP)"
+
+  parameter_explanations:
+    filtering:
+      l_freq: "0.1 Hz high-pass removes slow drifts while preserving slow ERP components"
+      h_freq: "40 Hz low-pass removes muscle artifacts and high-frequency noise"
+    
+    bad_channels:
+      threshold: "1.5 is conservative - fewer false positives but may miss some bad channels"
+      interpolate: "true automatically fixes bad channels for downstream analysis"
+    
+    epoching:
+      tmin: "-0.2s provides sufficient baseline period for most experiments"
+      tmax: "0.8s captures P300 and other late components"
+      baseline: "Pre-stimulus baseline correction is standard for ERP analysis"
+
+  expected_outputs:
+    - "Filtered continuous data"
+    - "Bad channel detection report"
+    - "Epoched data for each condition"
+    - "Quality control plots and metrics"
+    - "Processing summary report"
+
+  troubleshooting:
+    high_bad_channels: |
+      If >30% of channels are marked bad:
+      - Check electrode impedances during recording
+      - Consider more conservative threshold (e.g., 2.0)
+      - Inspect raw data for systematic issues
+    
+    filter_artifacts: |
+      If filtering introduces artifacts:
+      - Check for very short data segments
+      - Consider less aggressive filtering (0.05-50 Hz)
+      - Ensure adequate data length for filter parameters
+    
+    epoch_rejection: |
+      If too many epochs are rejected:
+      - Check baseline period for artifacts
+      - Consider artifact removal before epoching
+      - Adjust epoch time window if needed
+
+# Advanced configuration examples
+examples:
+  minimal_config: |
+    # Minimal user configuration - preset provides defaults
+    paths:
+      raw_data: "data/raw"
+      results: "data/processed"
+      file_extension: ".vhdr"
+    
+    participants:
+      - "sub-01.vhdr"
+      - "sub-02.vhdr"
+    
+    conditions:
+      - name: "Standard"
+        condition_markers: [1, 11]
+      - name: "Target"
+        condition_markers: [2, 12]
+
+  custom_filtering: |
+    # Override default filtering parameters
+    paths:
+      raw_data: "data/raw"
+      results: "data/processed"
+    
+    processing:
+      - filter:
+          l_freq: 0.05  # More aggressive high-pass
+          h_freq: 30.0  # More aggressive low-pass
+          notch: 50     # Add notch filter for line noise
+      
+      # Keep other stages from preset
+      - detect_bad_channels: {}
+      - rereference: {}
+      - epoch: {}
+
+  longer_epochs: |
+    # Extend epoch window for late components
+    processing:
+      - filter: {}
+      - detect_bad_channels: {}
+      - rereference: {}
+      - epoch:
+          tmin: -0.5
+          tmax: 1.5
+          baseline: [-0.5, -0.1]  # Avoid stimulus overlap

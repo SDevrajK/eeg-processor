@@ -1,0 +1,37 @@
+# Minimal test configuration for multi-event time-frequency analysis
+
+study:
+  name: "Multi_Event_Test"
+  dataset: "test_dataset"
+
+paths:
+  raw_data: "tests/fixtures/"
+  results: "tests/temp_results/"
+  file_extension: ".fif"
+
+participants:
+  - "test_participant.fif"
+
+conditions:
+  - name: "TestCondition"
+    description: "Test condition with multiple triggers"
+    triggers:
+      Standard: 1
+      Target: 2
+
+processing:
+  - filter:
+      l_freq: 1
+      h_freq: 40
+  - epoch:
+      tmin: -0.1
+      tmax: 0.5
+      baseline: [-0.1, 0]
+  - time_frequency:
+      method: morlet
+      freq_range: [8, 12]
+      n_freqs: 5
+
+output:
+  save_intermediates: false
+  create_report: false
