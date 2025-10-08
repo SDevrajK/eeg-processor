@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Union, Tuple
 import yaml
 
 import numpy as np
+import mne
 from mne import Epochs, concatenate_raws, pick_types, pick_channels_regexp
 from mne.io import BaseRaw
 from mne.preprocessing import ICA
@@ -277,103 +278,50 @@ def remove_blinks_regression(
         verbose: bool = False
 ) -> BaseRaw:
     """
-    Remove blinks using linear regression with temporary average reference.
-    Restores original reference after correction.
+    DEPRECATED: Remove blinks using regression methods.
+    
+    This function is deprecated and replaced by the improved EMCP (Eye Movement
+    Correction Procedures) implementation. Use remove_blinks_emcp stage instead.
+    
+    Migration:
+        Old: remove_blinks_regression(raw, eog_channels=['HEOG', 'VEOG'])
+        New: Use remove_blinks_emcp stage with method="eog_regression"
+    
+    Args:
+        raw: Raw EEG data
+        eog_channels: EOG channel names
+        show_plot: Whether to show plots
+        plot_duration: Plot duration
+        verbose: Enable verbose output
+        
+    Returns:
+        Raw object with blink correction applied
+        
+    Raises:
+        DeprecationWarning: This function is deprecated
     """
-    # Validate EOG channels exist
-    missing_eogs = [ch for ch in eog_channels if ch not in raw.ch_names]
-    if missing_eogs:
-        raise ValueError(f"Missing EOG channels: {missing_eogs}")
-
-    # Create safety copy
-    original_raw = raw.copy()
-
-    #Store original reference info
-    orig_ref = {
-        # Store which channels were EEG channels
-        'eeg_ch_names': [ch for i, ch in enumerate(original_raw.ch_names)
-                         if i in pick_types(original_raw.info, eeg=True, meg=False)],
-        # Store reference description
-        'description': original_raw.info.get('description', None),
-        # Store bad channels
-        'bads': original_raw.info['bads'].copy()
-    }
-
-    # Apply temporary average reference
-    original_raw.set_eeg_reference(ref_channels='average', projection=False)
-
-    # Detect blink events
-    from mne.preprocessing import EOGRegression, find_eog_events
-    eog_events = find_eog_events(original_raw, ch_name=eog_channels[1])
-    if verbose:
-        logger.info(f"Found {len(eog_events)} blink events")
-    if len(eog_events) == 0:
-        raise ValueError("No blink events detected in EOG channels!")
-
-    # Add diagnostic plot before correction
-    if show_plot:
-        plot_eog_with_blinks(raw.copy(), eog_channels)
-
-    # Fit regression model to blinks
-    eog_indices = [original_raw.ch_names.index(ch) for ch in eog_channels]
-    model = EOGRegression(
-        picks=pick_types(original_raw.info, eeg=True),
-        picks_artifact=eog_indices
-    ).fit(original_raw)  # <-- Fix: Remove `eog_events` here
-
-    cleaned_raw = model.apply(original_raw)
-
-    # Restore original reference if needed
-    if orig_ref['description'] != 'average':
-        if verbose:
-            logger.info("Restoring original reference scheme")
-
-        # Case 1: Specific reference channels (like ['M1', 'M2'])
-        if isinstance(orig_ref['description'], list):
-            available_refs = [ch for ch in orig_ref['description']
-                              if ch in cleaned_raw.ch_names]
-            if available_refs:
-                cleaned_raw.set_eeg_reference(ref_channels=available_refs, projection=False)
-            elif verbose:
-                logger.warning(f"Original reference channels {orig_ref['description']} not available")
-
-        # Case 2: Other reference schemes
-        elif orig_ref['description']:
-            try:
-                cleaned_raw.set_eeg_reference(ref_channels=orig_ref['description'], projection=False)
-            except Exception as e:
-                if verbose:
-                    logger.warning(f"Could not restore original reference: {str(e)}")
-
-    # Restore bad channel info
-    cleaned_raw.info['bads'] = orig_ref['bads']
-
-    if show_plot:
-        # Select a random EEG channel
-        eeg_chs = pick_types(raw.info, eeg=True)
-        #chan_idx = random.choice(eeg_chs)
-        chan_idx = 1
-        chan_name = raw.ch_names[chan_idx]
-
-        # Prepare data for plotting
-        n_samples = int(plot_duration * raw.info['sfreq'])
-        time = np.arange(n_samples) / raw.info['sfreq']
-        orig_data = original_raw.get_data(picks=chan_idx)[0, :n_samples] * 1e6  # μV
-        clean_data = cleaned_raw.get_data(picks=chan_idx)[0, :n_samples] * 1e6
-
-        # Create plot
-        fig, ax = plt.subplots(figsize=(12, 4))
-        ax.plot(time, orig_data, 'b', label='Original')
-        ax.plot(time, clean_data, 'r', alpha=0.7, label='Cleaned')
-        ax.set_title(f"Blink Regression: {chan_name}\n(Reference: {original_raw.info['description'] or 'Original'})")
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Amplitude (μV)')
-        ax.legend()
-        ax.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-    return cleaned_raw
+    import warnings
+    warnings.warn(
+        "remove_blinks_regression is deprecated. Use the 'remove_blinks_emcp' stage "
+        "with method='eog_regression' for improved functionality and quality tracking.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+    logger.warning("DEPRECATED: remove_blinks_regression is deprecated.")
+    logger.warning("Use 'remove_blinks_emcp' stage with method='eog_regression' instead.")
+    logger.warning("Falling back to new EMCP implementation...")
+    
+    # Import and use the new EMCP implementation
+    from .emcp import remove_blinks_eog_regression
+    
+    return remove_blinks_eog_regression(
+        raw=raw,
+        eog_channels=eog_channels,
+        show_plot=show_plot,
+        plot_duration=plot_duration,
+        verbose=verbose
+    )
 
 
 def plot_eog_with_blinks(raw: BaseRaw, eog_channels: List[str], plot_duration: float = 30.0):
@@ -630,6 +578,8 @@ def clean_rawdata_asr(
         max_dropout_fraction: float = 0.1,
         min_clean_fraction: float = 0.25,
         calibration_duration: Optional[float] = None,
+        use_clean_segment: bool = False,
+        clean_segment_suffix: str = "_clean_segment",
         show_plot: bool = False,
         plot_duration: float = 10.0,
         plot_start: float = 5.0,
@@ -662,6 +612,8 @@ def clean_rawdata_asr(
         min_clean_fraction: Min fraction of calibration data required (default: 0.25)
         calibration_duration: Duration of data to use for inline calibration (seconds). 
                               If None, uses ASRpy defaults (typically 60s or 25% of data)
+        use_clean_segment: Whether to load pre-processed clean segment for calibration
+        clean_segment_suffix: Suffix used when saving clean segments (default: "_clean_segment")
         show_plot: Display before/after comparison plot
         plot_duration: Duration of plot comparison (seconds)
         plot_start: Start time for plot (seconds)
@@ -722,6 +674,61 @@ def clean_rawdata_asr(
     n_channels = len(raw.ch_names)
     duration = raw.times[-1]
     
+    # Handle clean segment loading if requested
+    calibration_raw = None
+    if use_clean_segment:
+        try:
+            # Derive clean segment path from raw data filename
+            raw_path = Path(raw.filenames[0]) if hasattr(raw, 'filenames') and raw.filenames else None
+            if raw_path is None:
+                raise ValueError("Cannot determine filename for clean segment loading")
+            
+            # Look for clean segment in multiple locations
+            # 1. Same directory as raw file
+            clean_segment_path = raw_path.parent / f"{raw_path.stem}{clean_segment_suffix}.fif"
+            
+            # 2. In a Clean_Segments subdirectory under Raw
+            if not clean_segment_path.exists():
+                clean_segment_path = raw_path.parent / "Clean_Segments" / f"{raw_path.stem}{clean_segment_suffix}.fif"
+            
+            # 3. In a Clean_Segments directory parallel to Raw (e.g., Data/Children/Clean_Segments)
+            if not clean_segment_path.exists() and raw_path.parent.name == "Raw":
+                clean_segment_path = raw_path.parent.parent / "Clean_Segments" / f"{raw_path.stem}{clean_segment_suffix}.fif"
+            
+            # 4. In the results directory (if available)
+            if not clean_segment_path.exists() and hasattr(raw, '_results_dir'):
+                clean_segment_path = Path(raw._results_dir) / f"{raw_path.stem}{clean_segment_suffix}.fif"
+            
+            if not clean_segment_path.exists():
+                searched_locations = [
+                    raw_path.parent / f'{raw_path.stem}{clean_segment_suffix}.fif',
+                    raw_path.parent / 'Clean_Segments' / f'{raw_path.stem}{clean_segment_suffix}.fif'
+                ]
+                if raw_path.parent.name == "Raw":
+                    searched_locations.append(raw_path.parent.parent / 'Clean_Segments' / f'{raw_path.stem}{clean_segment_suffix}.fif')
+                if hasattr(raw, '_results_dir'):
+                    searched_locations.append(Path(raw._results_dir) / f'{raw_path.stem}{clean_segment_suffix}.fif')
+                
+                locations_str = '\n'.join(f"  - {loc}" for loc in searched_locations)
+                raise FileNotFoundError(
+                    f"Clean segment not found. Searched locations:\n{locations_str}\n"
+                    f"Run clean segment extraction first using a clean segment config file."
+                )
+            
+            logger.info(f"Loading pre-processed clean segment from {clean_segment_path}")
+            calibration_raw = mne.io.read_raw_fif(clean_segment_path, preload=True)
+            logger.success(f"Loaded clean segment: {calibration_raw.times[-1]:.1f}s of data")
+            
+            # Override calibration_duration since we're using the entire clean segment
+            calibration_duration = None
+            
+        except Exception as e:
+            logger.error(f"Failed to load clean segment: {str(e)}")
+            if verbose:
+                logger.info("Falling back to inline calibration")
+            use_clean_segment = False
+            calibration_raw = None
+    
     # Validate parameters
     if cutoff <= 0:
         raise ValueError("ASR cutoff must be positive")
@@ -780,9 +787,17 @@ def clean_rawdata_asr(
             logger.info(f"  Window length: {window_length}s")
             logger.info(f"  Window overlap: {window_overlap:.1%}")
         
-        # Apply ASR with optional calibration duration
+        # Apply ASR with optional calibration duration or clean segment
         logger.info("Applying ASR correction...")
-        if calibration_duration is not None:
+        if calibration_raw is not None:
+            # Use pre-processed clean segment for calibration
+            if verbose:
+                logger.info(f"Fitting ASR on pre-processed clean segment ({calibration_raw.times[-1]:.1f}s)...")
+            asr.fit(calibration_raw)
+            if verbose:
+                logger.info("Applying ASR correction to full dataset...")
+            cleaned_raw = asr.transform(original_raw.copy())
+        elif calibration_duration is not None:
             # Use explicit calibration duration by cropping calibration data
             # but apply to full data
             calibration_raw_subset = original_raw.copy().crop(tmax=calibration_duration)
@@ -834,7 +849,9 @@ def clean_rawdata_asr(
             'min_clean_fraction': min_clean_fraction,
             'calibration_duration': calibration_duration,
             'data_duration': duration,
-            'calibration_approach': 'explicit_duration' if calibration_duration else 'automatic_inline',
+            'calibration_approach': 'clean_segment' if calibration_raw is not None else ('explicit_duration' if calibration_duration else 'automatic_inline'),
+            'used_clean_segment': calibration_raw is not None,
+            'clean_segment_duration': calibration_raw.times[-1] if calibration_raw is not None else None,
             'processing_time': duration,
             'n_channels': n_channels,
             'mean_correlation': float(mean_correlation),
@@ -859,7 +876,12 @@ def clean_rawdata_asr(
         
         # Log summary
         logger.success(f"ASR correction completed")
-        logger.info(f"  Calibration: {calibration_duration:.1f}s" if calibration_duration else "  Calibration: automatic inline")
+        if calibration_raw is not None:
+            logger.info(f"  Calibration: pre-processed clean segment ({calibration_raw.times[-1]:.1f}s)")
+        elif calibration_duration:
+            logger.info(f"  Calibration: {calibration_duration:.1f}s")
+        else:
+            logger.info(f"  Calibration: automatic inline")
         logger.info(f"  Mean channel correlation: {mean_correlation:.3f}")
         logger.info(f"  Variance change: {variance_change:+.1f}%")
         

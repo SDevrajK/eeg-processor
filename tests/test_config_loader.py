@@ -18,12 +18,17 @@ class TestConfigLoader:
         test_data_dir = Path(__file__).parent / "test_data"
         
         config_data = {
-            "paths": {
-                "raw_data_dir": str(test_data_dir / "brainvision"),
-                "results_dir": str(test_data_dir / "results"),
-                "participants": {"sub-01": "test.vhdr"}
+            "study": {
+                "name": "Test Study",
+                "dataset": "test"
             },
-            "stages": ["load_data"],
+            "paths": {
+                "raw_data": str(test_data_dir / "brainvision"),
+                "results": str(test_data_dir / "results"),
+                "file_extension": ".vhdr"
+            },
+            "participants": {"sub-01": "test.vhdr"},
+            "processing": ["load_data"],
             "conditions": []
         }
         
@@ -43,19 +48,21 @@ class TestConfigLoader:
         """Test validation catches missing required sections."""
         incomplete_config = {
             "paths": {
-                "raw_data_dir": "/tmp/empty_directory_that_doesnt_exist"
+                "raw_data": "/tmp/empty_directory_that_doesnt_exist"
                 # This will cause no participants to be found
             }
-            # Missing: stages, conditions  
+            # Missing: study, participants, processing  
         }
         
-        with pytest.raises(ValidationError, match="Raw data directory does not exist"):
+        with pytest.raises(ValidationError, match="Missing required configuration keys"):
             load_config(incomplete_config)
 
     def test_missing_paths_section(self):
         """Test validation catches missing paths section."""
         config_without_paths = {
-            "stages": ["load_data"],
+            "study": {"name": "Test"},
+            "participants": {"sub-01": "test.vhdr"},
+            "processing": ["load_data"],
             "conditions": []
         }
         
@@ -65,12 +72,13 @@ class TestConfigLoader:
     def test_nonexistent_raw_data_directory(self):
         """Test validation catches nonexistent raw data directory."""
         config_with_bad_path = {
+            "study": {"name": "Test"},
             "paths": {
-                "raw_data_dir": "/definitely/nonexistent/directory",
-                "results_dir": "/tmp/results",
-                "participants": {"sub-01": "test.vhdr"}
+                "raw_data": "/definitely/nonexistent/directory",
+                "results": "/tmp/results"
             },
-            "stages": ["load_data"],
+            "participants": {"sub-01": "test.vhdr"},
+            "processing": ["load_data"],
             "conditions": []
         }
         
@@ -99,12 +107,14 @@ class TestConfigLoader:
         test_data_dir = Path(__file__).parent / "test_data"
         
         base_config = {
+            "study": {"name": "Test Study"},
             "paths": {
-                "raw_data_dir": str(test_data_dir / "brainvision"),
-                "results_dir": str(test_data_dir / "results"),
-                "participants": {"sub-01": "test.vhdr"}
+                "raw_data": str(test_data_dir / "brainvision"),
+                "results": str(test_data_dir / "results"),
+                "file_extension": ".vhdr"
             },
-            "stages": ["load_data"],
+            "participants": {"sub-01": "test.vhdr"},
+            "processing": ["load_data"],
             "conditions": []
         }
         
@@ -123,14 +133,17 @@ class TestConfigLoader:
         test_data_dir = Path(__file__).parent / "test_data"
         
         config_with_dataset = {
-            "paths": {
-                "raw_data_dir": str(test_data_dir / "brainvision"),
-                "results_dir": str(test_data_dir / "results"),
-                "participants": {"sub-01": "test.vhdr"}
+            "study": {
+                "name": "Test Study",
+                "dataset": "test_dataset"
             },
-            "stages": ["load_data"],
-            "conditions": [],
-            "dataset_name": "test_dataset"
+            "paths": {
+                "raw_data": str(test_data_dir / "brainvision"),
+                "results": str(test_data_dir / "results")
+            },
+            "participants": {"sub-01": "test.vhdr"},
+            "processing": ["load_data"],
+            "conditions": []
         }
         
         config = load_config(config_with_dataset)
@@ -139,6 +152,21 @@ class TestConfigLoader:
 
 class TestPipelineConfig:
     """Test cases for PipelineConfig dataclass."""
+    
+    def create_test_config(self):
+        """Helper method to create a test PipelineConfig instance."""
+        from pathlib import Path
+        return PipelineConfig(
+            raw_data_dir=Path("/test/raw"),
+            results_dir=Path("/test/results"),
+            file_extension=".vhdr",
+            participants={"sub-01": "test.vhdr"},
+            stages=[{"load_data": {}}],
+            conditions=[],
+            study_info={"name": "Test"},
+            output_config={},
+            dataset_name="test"
+        )
 
     def test_pipeline_config_has_required_fields(self):
         """Test that PipelineConfig has all required fields."""
@@ -146,12 +174,18 @@ class TestPipelineConfig:
         
         field_names = [f.name for f in fields(PipelineConfig)]
         required_fields = [
-            'raw_data_dir', 'interim_dir', 'results_dir', 'figures_dir',
-            'file_extension', 'participants', 'stages', 'conditions'
+            'raw_data_dir', 'results_dir', 'file_extension', 
+            'participants', 'stages', 'conditions', 'study_info', 'output_config'
         ]
         
         for field in required_fields:
             assert field in field_names, f"Required field {field} missing from PipelineConfig"
+        
+        # Test that properties exist
+        config = self.create_test_config()
+        assert hasattr(config, 'processed_dir'), "processed_dir property missing"
+        assert hasattr(config, 'figures_dir'), "figures_dir property missing"
+        assert hasattr(config, 'reports_dir'), "reports_dir property missing"
 
     def test_pipeline_config_optional_dataset_name(self):
         """Test that dataset_name is optional with default None."""

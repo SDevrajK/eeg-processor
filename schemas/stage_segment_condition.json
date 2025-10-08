@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_segment_condition.json",
+  "title": "EEG Processor - segment_condition Stage",
+  "description": "Segment Raw data based on condition markers with optional in-place operation",
+  "type": "object",
+  "properties": {
+    "padding": {
+      "type": "number",
+      "default": 5.0
+    }
+  },
+  "additionalProperties": false
+}

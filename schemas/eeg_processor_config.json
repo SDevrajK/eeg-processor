@@ -1,0 +1,221 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/config.json",
+  "title": "EEG Processor Configuration",
+  "description": "Configuration schema for EEG Processor pipeline",
+  "type": "object",
+  "required": [
+    "paths",
+    "participants",
+    "stages"
+  ],
+  "properties": {
+    "study": {
+      "type": "object",
+      "description": "Study metadata information",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the study or experiment"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the study"
+        },
+        "experimenter": {
+          "type": "string",
+          "description": "Name of the experimenter or researcher"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Study date in YYYY-MM-DD format"
+        }
+      },
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "description": "File and directory paths configuration",
+      "required": [
+        "raw_data_dir",
+        "results_dir",
+        "file_extension"
+      ],
+      "properties": {
+        "raw_data_dir": {
+          "type": "string",
+          "description": "Directory containing raw EEG data files"
+        },
+        "results_dir": {
+          "type": "string",
+          "description": "Directory where processed results will be saved"
+        },
+        "file_extension": {
+          "type": "string",
+          "description": "File extension for EEG data files",
+          "enum": [
+            ".vhdr",
+            ".edf",
+            ".fif",
+            ".set",
+            ".bdf"
+          ],
+          "default": ".vhdr"
+        },
+        "interim_dir": {
+          "type": "string",
+          "description": "Directory for intermediate processing files"
+        },
+        "figures_dir": {
+          "type": "string",
+          "description": "Directory for generated figures and plots"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dataset_name": {
+      "type": "string",
+      "description": "Optional dataset name for organizing results"
+    },
+    "participants": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "auto"
+          ],
+          "description": "Automatically discover all EEG files"
+        },
+        {
+          "type": "array",
+          "description": "List of participant filenames",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        {
+          "type": "object",
+          "description": "Detailed participant configuration",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string"
+                  },
+                  "conditions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "description": "Ordered list of processing stages",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Stage name (uses default parameters)"
+          },
+          {
+            "type": "object",
+            "description": "Stage with custom parameters",
+            "minProperties": 1,
+            "maxProperties": 1
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "conditions": {
+      "type": "array",
+      "description": "Experimental conditions and their event markers",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "condition_markers"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the experimental condition"
+          },
+          "condition_markers": {
+            "type": "array",
+            "description": "Event markers for this condition",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "minItems": 1
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description of the condition"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "output": {
+      "type": "object",
+      "description": "Output and reporting configuration",
+      "properties": {
+        "save_intermediates": {
+          "type": "boolean",
+          "description": "Whether to save intermediate processing files",
+          "default": false
+        },
+        "figure_format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "pdf",
+            "svg",
+            "jpg"
+          ],
+          "description": "Format for generated figures",
+          "default": "png"
+        },
+        "dpi": {
+          "type": "integer",
+          "minimum": 72,
+          "maximum": 600,
+          "description": "DPI for generated figures",
+          "default": 150
+        },
+        "create_report": {
+          "type": "boolean",
+          "description": "Whether to create quality control reports",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

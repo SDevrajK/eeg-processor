@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_detect_bad_channels.json",
+  "title": "EEG Processor - detect_bad_channels Stage",
+  "description": "Detect and optionally interpolate bad channels using MNE's LOF method. Uses Local Outlier Factor to identify channels that are outliers compared to their spatial neighbors, avoiding false positives from physiological artifacts like eyeblinks.",
+  "type": "object",
+  "properties": {
+    "n_neighbors": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 3,
+      "maximum": 50,
+      "description": "Number of neighboring channels"
+    },
+    "threshold": {
+      "type": "number",
+      "default": 1.5,
+      "minimum": 0.1,
+      "maximum": 10.0,
+      "description": "Detection threshold"
+    },
+    "interpolate": {
+      "type": "boolean",
+      "default": true
+    },
+    "verbose": {
+      "type": "boolean",
+      "default": false
+    },
+    "show_plot": {
+      "type": "boolean",
+      "default": false
+    },
+    "plot_duration": {
+      "type": "number",
+      "default": 2.0
+    },
+    "plot_start": {
+      "type": "number",
+      "default": 5.0
+    }
+  },
+  "examples": [
+    {
+      "threshold": 1.5,
+      "n_neighbors": 8
+    },
+    {
+      "threshold": 2.0,
+      "interpolate": true
+    }
+  ],
+  "additionalProperties": false
+}

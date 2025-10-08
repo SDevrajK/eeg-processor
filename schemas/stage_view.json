@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_view.json",
+  "title": "EEG Processor - view Stage",
+  "description": "Unified plotting interface",
+  "type": "object",
+  "properties": {
+    "stage_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "stage_name"
+  ],
+  "additionalProperties": false
+}

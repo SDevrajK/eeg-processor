@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_compute_eog.json",
+  "title": "EEG Processor - compute_eog Stage",
+  "description": "Compute HEOG/VEOG from electrode pairs.",
+  "type": "object",
+  "properties": {
+    "heog_pair": {
+      "type": "null"
+    },
+    "veog_pair": {
+      "type": "null"
+    },
+    "ch_names": {
+      "type": "object",
+      "default": "{'heog': 'HEOG', 'veog': 'VEOG'}"
+    },
+    "overwrite": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,3 +1,14 @@
 /data/
 /tests/test_data/brainvision/
 /tests/test_data/curry/
+
+# MNE sample dataset for validation testing (large files)
+/tests/test_data/mne_sample/
+/tests/test_data/sample/
+*.fif
+**/sample_audvis_raw.fif
+**/sample_audvis_filt-0-40_raw.fif
+
+# MNE data directories
+mne_data/
+MNE-sample-data/

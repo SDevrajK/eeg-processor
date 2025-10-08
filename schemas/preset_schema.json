@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/preset.json",
+  "title": "EEG Processor Preset Schema",
+  "description": "Schema for EEG Processor preset configuration files",
+  "type": "object",
+  "required": [
+    "metadata",
+    "config_template"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "description",
+        "category"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$",
+          "description": "Preset identifier (lowercase, alphanumeric, hyphens, underscores)"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semantic version (e.g., 1.0.0)"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Human-readable description of the preset"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "advanced",
+            "research"
+          ],
+          "description": "Preset category"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags for categorizing and searching presets"
+        },
+        "use_cases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Typical use cases for this preset"
+        },
+        "author": {
+          "type": "string",
+          "description": "Preset author"
+        },
+        "created_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Creation date (YYYY-MM-DD)"
+        },
+        "recommended_channels": {
+          "type": "string",
+          "description": "Recommended number/type of channels"
+        }
+      },
+      "additionalProperties": false
+    },
+    "config_template": {
+      "$ref": "eeg_processor_config.json",
+      "description": "The actual configuration template"
+    }
+  },
+  "additionalProperties": false
+}

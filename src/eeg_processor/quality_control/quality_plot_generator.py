@@ -13,8 +13,6 @@ from io import BytesIO
 import base64
 from loguru import logger
 
-matplotlib.use('Agg')
-
 
 class QualityPlotGenerator:
     """
@@ -25,6 +23,17 @@ class QualityPlotGenerator:
     2. Data quality issues
     3. Stage-specific quality metrics (only for stages that were used)
     """
+    
+    @staticmethod
+    def set_matplotlib_backend(backend='Agg'):
+        """
+        Set matplotlib backend for report generation.
+        
+        Args:
+            backend: Backend to use (default: 'Agg' for non-interactive)
+        """
+        matplotlib.use(backend)
+        logger.debug(f"Matplotlib backend set to: {backend}")
     
     def __init__(self, pipeline_info: Dict, quality_thresholds: Dict):
         """

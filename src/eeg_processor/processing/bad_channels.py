@@ -100,7 +100,7 @@ def detect_bad_channels(
         'n_detected': len(detected_bads),
         'n_final': len(final_bads),
         'interpolation_attempted': interpolate,
-        'interpolation_successful': interpolate and len(final_bads) < len(original_bads | set(detected_bads)),
+        'interpolation_successful': interpolate and (len(detected_bads) > 0) and (final_bads != set(detected_bads)),
         'interpolation_details': interpolation_details,
         'method': 'lof_global',
         'parameters': {

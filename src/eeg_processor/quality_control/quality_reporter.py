@@ -238,13 +238,14 @@ class QualityReporter:
             stages = condition_data.get('stages', {})
             if 'detect_bad_channels' in stages:
                 metrics = stages['detect_bad_channels'].get('metrics', {})
+                interpolation_details = metrics.get('interpolation_details', {})
                 return {
                     'bad_channels': metrics.get('detected_bads', []),
-                    'interpolated_channels': metrics.get('interpolation_details', {}).get('successfully_interpolated', []),
-                    'still_bad_channels': metrics.get('interpolation_details', {}).get('still_noisy', []),
-                    'interpolation_successful': metrics.get('interpolation_details', {}).get('success_rate', 0) > 0.8,
+                    'interpolated_channels': interpolation_details.get('successfully_interpolated', []),
+                    'still_bad_channels': interpolation_details.get('still_noisy', []),
+                    'interpolation_successful': metrics.get('interpolation_successful', False),
                     'n_detected': metrics.get('n_detected', 0),
-                    'bad_percentage': metrics.get('interpolation_details', {}).get('bad_percentage_before', 0)
+                    'bad_percentage': interpolation_details.get('bad_percentage_before', 0)
                 }
         return {}
     
@@ -256,7 +257,7 @@ class QualityReporter:
                 metrics = stages['epoch'].get('metrics', {})
                 return {
                     'rejection_rate': metrics.get('rejection_rate', 0),
-                    'rejection_reasons_by_channel': metrics.get('rejection_reasons', {}),
+                    'rejection_reasons_by_channel': metrics.get('rejection_reasons', {}),  # Note: tracker provides reason->count, not channel->count
                     'n_epochs_rejected': metrics.get('rejected_epochs', 0),
                     'n_epochs_total': metrics.get('total_epochs', 0)
                 }
@@ -307,26 +308,24 @@ class QualityReporter:
             rejection_rate = epoch_rejection_details.get('rejection_rate', 0)
             n_rejected = epoch_rejection_details.get('n_epochs_rejected', 0)
             n_total = epoch_rejection_details.get('n_epochs_total', 0)
-            rejection_by_channel = epoch_rejection_details.get('rejection_reasons_by_channel', {})
+            rejection_reasons = epoch_rejection_details.get('rejection_reasons_by_channel', {})
             
             html += f'''
             <p><strong>Rejection rate:</strong> {rejection_rate:.1f}% ({n_rejected}/{n_total} epochs)</p>'''
             
-            if rejection_by_channel:
-                # Show only channels that caused rejections
-                problematic_channels = {ch: count for ch, count in rejection_by_channel.items() if count > 0}
-                if problematic_channels:
-                    html += '''
-            <p><strong>Channels causing epoch rejections:</strong></p>
+            if rejection_reasons:
+                # Show rejection reasons (not channels, as tracker provides reason->count)
+                html += '''
+            <p><strong>Rejection reasons:</strong></p>
             <ul>'''
-                    for channel, count in sorted(problematic_channels.items(), key=lambda x: x[1], reverse=True):
-                        html += f'''
-                <li>{channel}: {count} epoch rejections</li>'''
-                    html += '''
+                for reason, count in sorted(rejection_reasons.items(), key=lambda x: x[1], reverse=True):
+                    html += f'''
+                <li>{reason}: {count} epoch rejections</li>'''
+                html += '''
             </ul>'''
-                else:
-                    html += '''
-            <p style="color: #28a745;"><strong>No channel-specific epoch rejections</strong></p>'''
+            else:
+                html += '''
+            <p style="color: #28a745;"><strong>No specific rejection reasons tracked</strong></p>'''
             
             html += '''
         </div>'''
@@ -345,7 +344,7 @@ class QualityReporter:
 
 
 # Standalone function for generating quality reports
-def generate_quality_reports(results_dir: Path) -> Tuple[Path, List[Path]]:
+def generate_quality_reports(results_dir: Path, set_backend: bool = True) -> Tuple[Path, List[Path]]:
     """
     Generate quality reports from saved metrics.
     
@@ -353,10 +352,17 @@ def generate_quality_reports(results_dir: Path) -> Tuple[Path, List[Path]]:
     
     Args:
         results_dir: Results directory containing quality/quality_metrics.json
+        set_backend: Whether to set matplotlib backend to 'Agg' (default: True)
         
     Returns:
         Tuple of (summary_report_path, list_of_participant_report_paths)
     """
+    # Set matplotlib backend for non-interactive plot generation if requested
+    if set_backend:
+        from .quality_plot_generator import QualityPlotGenerator
+        QualityPlotGenerator.set_matplotlib_backend('Agg')
+    
+    results_dir = Path(results_dir)
     quality_dir = results_dir / "quality"
     metrics_file = quality_dir / "quality_metrics.json"
     

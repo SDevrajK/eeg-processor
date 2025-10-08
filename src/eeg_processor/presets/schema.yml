@@ -1,0 +1,262 @@
+# EEG Processor Preset Schema Definition
+# This file defines the structure and validation rules for preset configurations
+
+preset_schema:
+  # Required metadata for all presets
+  metadata:
+    name: 
+      type: string
+      required: true
+      description: "Human-readable name of the preset"
+    
+    description:
+      type: string
+      required: true
+      description: "Detailed description of what this preset does"
+    
+    category:
+      type: string
+      required: true
+      enum: ["basic", "advanced", "research"]
+      description: "Category classification for organization"
+    
+    version:
+      type: string
+      required: true
+      pattern: "^\\d+\\.\\d+\\.\\d+$"
+      description: "Semantic version (e.g., '1.0.0')"
+    
+    author:
+      type: string
+      required: false
+      description: "Author or creator of the preset"
+    
+    created:
+      type: string
+      required: false
+      format: date
+      description: "Creation date (YYYY-MM-DD)"
+    
+    tags:
+      type: array
+      items:
+        type: string
+      required: false
+      description: "Keywords for searchability (e.g., ['erp', 'artifact-removal'])"
+    
+    use_cases:
+      type: array
+      items:
+        type: string
+      required: false
+      description: "List of typical use cases for this preset"
+    
+    data_formats:
+      type: array
+      items:
+        type: string
+        enum: ["brainvision", "edf", "fif", "eeglab", "curry", "ant", "biosemi"]
+      required: false
+      description: "Recommended EEG file formats for this preset"
+    
+    recommended_channels:
+      type: string
+      required: false
+      description: "Recommended minimum number of channels (e.g., '32+', '64+', 'any')"
+
+  # Configuration template that will be merged with user settings
+  config_template:
+    # Study information (optional defaults)
+    study:
+      type: object
+      required: false
+      properties:
+        name:
+          type: string
+          default: "EEG Study"
+        description:
+          type: string
+          default: ""
+        experimenter:
+          type: string
+          default: ""
+
+    # Data paths (user must provide)
+    paths:
+      type: object
+      required: true
+      properties:
+        raw_data_dir:
+          type: string
+          required: true
+          description: "Path to directory containing raw EEG files"
+        results_dir:
+          type: string
+          required: true
+          description: "Path to directory for processed results"
+        file_extension:
+          type: string
+          required: true
+          description: "File extension for EEG files (e.g., '.vhdr', '.edf')"
+
+    # Dataset organization (optional)
+    dataset_name:
+      type: string
+      required: false
+      description: "Optional dataset name for organizing results"
+
+    # Participants (preset can provide default format)
+    participants:
+      type: [array, string]
+      required: true
+      description: "List of participant files or 'auto' for automatic detection"
+
+    # Processing stages (core of the preset)
+    processing:
+      type: array
+      items:
+        type: [object, string]
+      required: true
+      description: "Ordered list of processing stages with parameters"
+      minItems: 1
+
+    # Experimental conditions (preset can provide templates)
+    conditions:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            required: true
+          condition_markers:
+            type: array
+            items:
+              type: [string, integer]
+            required: true
+          markers:
+            type: [array, "null"]
+            required: false
+      required: false
+      description: "Experimental conditions and their event markers"
+
+    # Output settings (preset provides sensible defaults)
+    output:
+      type: object
+      required: false
+      properties:
+        save_intermediates:
+          type: boolean
+          default: false
+        figure_format:
+          type: string
+          enum: ["png", "pdf", "svg"]
+          default: "png"
+        dpi:
+          type: integer
+          default: 300
+          minimum: 72
+          maximum: 600
+
+# Validation rules for preset files
+validation_rules:
+  # File naming convention
+  filename_pattern: "^[a-z0-9_-]+\\.yml$"
+  
+  # Required sections
+  required_sections:
+    - metadata
+    - config_template
+  
+  # Stage validation
+  valid_stages:
+    - crop
+    - adjust_events
+    - correct_triggers
+    - filter
+    - compute_eog
+    - detect_bad_channels
+    - rereference
+    - remove_artifacts
+    - remove_blinks_emcp
+    - clean_rawdata_asr
+    - segment_condition
+    - epoch
+    - time_frequency
+    - time_frequency_raw
+    - time_frequency_average
+    - view
+
+  # Common parameter validation
+  common_parameters:
+    frequency_ranges:
+      l_freq:
+        type: [number, "null"]
+        minimum: 0.01
+        maximum: 1000
+      h_freq:
+        type: [number, "null"]
+        minimum: 0.1
+        maximum: 5000
+    
+    time_windows:
+      tmin:
+        type: number
+        minimum: -10.0
+        maximum: 10.0
+      tmax:
+        type: number
+        minimum: -10.0
+        maximum: 60.0
+    
+    thresholds:
+      threshold:
+        type: number
+        minimum: 0.1
+        maximum: 10.0
+
+# Documentation requirements for presets
+documentation_requirements:
+  # Each preset must include usage examples
+  examples_required: true
+  
+  # Minimum description length
+  min_description_length: 50
+  
+  # Required documentation sections
+  required_docs:
+    - overview
+    - typical_use_cases
+    - parameter_explanations
+    - expected_outputs
+    - troubleshooting
+
+# Preset inheritance system
+inheritance:
+  # Allow presets to inherit from base configurations
+  base_preset_support: true
+  
+  # Override behavior
+  override_behavior:
+    processing: "replace"  # Replace entire processing array
+    conditions: "merge"  # Merge condition arrays
+    output: "merge"  # Merge output settings
+    paths: "override"  # Always use user-provided paths
+
+# Quality control for presets
+quality_control:
+  # Automatic validation on load
+  validate_on_load: true
+  
+  # Check for common issues
+  validation_checks:
+    - stage_order_consistency
+    - parameter_compatibility
+    - missing_required_fields
+    - deprecated_parameters
+    
+  # Performance considerations
+  performance_warnings:
+    - too_many_stages
+    - computationally_expensive_combinations
+    - memory_intensive_parameters

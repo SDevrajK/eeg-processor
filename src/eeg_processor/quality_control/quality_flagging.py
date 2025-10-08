@@ -98,6 +98,13 @@ class QualityFlagger:
             if ica_flags:
                 flags.extend(ica_flags)
                 flag_level = self._escalate_flag_level(flag_level, ica_level)
+        
+        # Check EMCP issues (if EMCP was used)
+        if self.pipeline_info['has_emcp']:
+            emcp_flags, emcp_level = self._check_emcp_correction(participant_data)
+            if emcp_flags:
+                flags.extend(emcp_flags)
+                flag_level = self._escalate_flag_level(flag_level, emcp_level)
                 
         return {
             'participant_id': participant_id,
@@ -138,28 +145,41 @@ class QualityFlagger:
         bad_channel_metrics = self._get_bad_channel_metrics(participant_data)
         
         if bad_channel_metrics:
-            bad_percentage = bad_channel_metrics.get('bad_percentage_before', 0)
             n_detected = bad_channel_metrics.get('n_detected', 0)
-            interpolation_successful = bad_channel_metrics.get('interpolation_successful', True)
-            interpolation_reliable = bad_channel_metrics.get('interpolation_reliable', True)
+            interpolation_details = bad_channel_metrics.get('interpolation_details', {})
+            
+            # Use the actual bad percentage calculated during interpolation
+            bad_percentage = interpolation_details.get('bad_percentage_before', 0)
+            
+            # If no interpolation details, fallback to a simple calculation
+            if bad_percentage == 0 and n_detected > 0:
+                # Estimate total EEG channels (excluding EOG, etc.)
+                total_eeg_channels = 32  # Default assumption for typical systems
+                bad_percentage = (n_detected / total_eeg_channels) * 100
+            
+            # Check if interpolation failed: final_bads should equal detected_bads if interpolation failed
+            detected_bads = set(bad_channel_metrics.get('detected_bads', []))
+            final_bads = set(bad_channel_metrics.get('final_bads', []))
+            interpolation_attempted = bad_channel_metrics.get('interpolation_attempted', False)
+            
+            # Interpolation failed if it was attempted but final_bads == detected_bads
+            interpolation_failed = interpolation_attempted and (final_bads == detected_bads) and len(detected_bads) > 0
+            interpolation_reliable = interpolation_details.get('interpolation_reliable', True)
             
             # Critical issues
-            if not interpolation_successful:
-                flags.append("Bad channel interpolation failed")
+            if interpolation_failed:
+                flags.append("Bad channel interpolation failed - no channels successfully interpolated")
                 flag_level = 'critical'
             elif not interpolation_reliable:
                 flags.append("Bad channel interpolation unreliable")
                 flag_level = 'critical'
-            elif bad_percentage > self.thresholds['bad_channels']['critical_percentage']:
+            elif bad_percentage >= self.thresholds['bad_channels']['critical_percentage']:
                 flags.append(f"Severe channel noise: {bad_percentage:.1f}% bad channels")
                 flag_level = 'critical'
             
             # Warning issues  
-            elif bad_percentage > self.thresholds['bad_channels']['warning_percentage']:
+            elif bad_percentage >= self.thresholds['bad_channels']['warning_percentage']:
                 flags.append(f"Moderate channel noise: {bad_percentage:.1f}% bad channels")
-                flag_level = 'warning'
-            elif n_detected > self.thresholds['bad_channels']['max_reasonable']:
-                flags.append(f"High bad channel count: {n_detected} channels")
                 flag_level = 'warning'
                 
         return flags, flag_level
@@ -241,6 +261,52 @@ class QualityFlagger:
             stages = condition_data.get('stages', {})
             if 'blink_artifact' in stages:
                 return stages['blink_artifact'].get('metrics', {})
+        return {}
+    
+    def _check_emcp_correction(self, participant_data: Dict) -> Tuple[List[str], str]:
+        """Check for EMCP blink correction issues."""
+        flags = []
+        flag_level = 'good'
+        
+        # Extract EMCP metrics from any condition
+        emcp_metrics = self._get_emcp_metrics(participant_data)
+        
+        if emcp_metrics:
+            # Check for essential quality flags that indicate real problems
+            quality_flags = emcp_metrics.get('quality_flags', {})
+            
+            # Critical: No blinks detected when EMCP was used (suggests method failure)
+            if quality_flags.get('no_blinks_detected', False):
+                flags.append("EMCP found no blinks to correct (possible EOG channel issue)")
+                flag_level = 'critical'
+            
+            # Critical: Very low correlation suggests severe overcorrection
+            mean_correlation = emcp_metrics.get('mean_correlation', 1.0)
+            if mean_correlation < 0.7:
+                flags.append(f"EMCP severe overcorrection (correlation: {mean_correlation:.2f})")
+                flag_level = 'critical'
+            
+            # Warning: Low correlation suggests possible overcorrection
+            elif mean_correlation < 0.8:
+                flags.append(f"EMCP possible overcorrection (correlation: {mean_correlation:.2f})")
+                flag_level = 'warning'
+            
+            # Warning: Extreme regression coefficients (Gratton & Coles only)
+            if quality_flags.get('extreme_coefficients', False):
+                max_coeff = emcp_metrics.get('max_regression_coefficient', 0)
+                flags.append(f"EMCP extreme regression coefficients (max: {max_coeff:.3f})")
+                if flag_level == 'good':
+                    flag_level = 'warning'
+                
+        return flags, flag_level
+    
+    def _get_emcp_metrics(self, participant_data: Dict) -> Dict:
+        """Extract EMCP metrics from participant data."""
+        # Look for EMCP metrics in any condition
+        for condition_data in participant_data['conditions'].values():
+            stages = condition_data.get('stages', {})
+            if 'remove_blinks_emcp' in stages:
+                return stages['remove_blinks_emcp'].get('metrics', {})
         return {}
     
     def _escalate_flag_level(self, current_level: str, new_level: str) -> str:

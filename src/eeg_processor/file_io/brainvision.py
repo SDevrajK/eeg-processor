@@ -54,76 +54,83 @@ class BrainVisionLoader(FileLoader):
         logger.info(f"Loading XML-based cropped BrainVision file (.xhdr): {file_path.name}")
         
         # Create temporary directory for converted files
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_dir_path = Path(temp_dir)
-            base_name = file_path.stem
+        # Use mkdtemp instead of TemporaryDirectory to prevent automatic cleanup
+        temp_dir = tempfile.mkdtemp(prefix='brainvision_xhdr_')
+        temp_dir_path = Path(temp_dir)
+        base_name = file_path.stem
+        logger.debug(f"Created temp directory: {temp_dir}")
+        
+        try:
+            # Parse the XML header file
+            tree = ET.parse(file_path)
+            root = tree.getroot()
+                
+            # Extract namespace if present
+            namespace = ''
+            if root.tag.startswith('{'):
+                namespace = root.tag.split('}')[0] + '}'
+                
+            # Convert XML to .vhdr format
+            vhdr_content = BrainVisionLoader._convert_xml_to_vhdr(root, namespace, base_name)
+                
+            # Create temporary .vhdr file
+            temp_vhdr = temp_dir_path / f"{base_name}.vhdr"
+            temp_eeg = temp_dir_path / f"{base_name}.eeg"  
+            temp_vmrk = temp_dir_path / f"{base_name}.vmrk"
+                
+            # Write converted .vhdr content
+            with open(temp_vhdr, 'w', encoding='utf-8') as f:
+                f.write(vhdr_content)
+                
+            # Copy data file (.dat -> .eeg)
+            orig_dat = file_path.parent / f"{base_name}.dat"
+            if orig_dat.exists():
+                shutil.copy2(orig_dat, temp_eeg)
+                logger.debug(f"Copied {orig_dat.name} -> {temp_eeg.name}")
+            else:
+                raise FileNotFoundError(f"Data file not found: {orig_dat}")
+                
+            # Convert marker file (.xmrk -> .vmrk) 
+            orig_xmrk = file_path.parent / f"{base_name}.xmrk"
+            if orig_xmrk.exists():
+                vmrk_content = BrainVisionLoader._convert_xmrk_to_vmrk(orig_xmrk, base_name)
+                with open(temp_vmrk, 'w', encoding='utf-8') as f:
+                    f.write(vmrk_content)
+                logger.debug(f"Converted {orig_xmrk.name} -> {temp_vmrk.name}")
+            else:
+                logger.warning(f"Marker file not found: {orig_xmrk}")
+                # Create empty marker file if missing
+                with open(temp_vmrk, 'w', encoding='utf-8') as f:
+                    f.write("Brain Vision Data Exchange Marker File, Version 1.0\n")
+                
+            # Load using the temporary .vhdr file
+            # For .xhdr files, we must preload data while temporary files exist
+            # because MNE will try to access the files later after cleanup
+            kwargs_copy = kwargs.copy()
+            original_preload = kwargs_copy.get('preload', False)
+            kwargs_copy['preload'] = True
             
-            try:
-                # Parse the XML header file
-                tree = ET.parse(file_path)
-                root = tree.getroot()
+            raw = BrainVisionLoader._load_vhdr_file(temp_vhdr, **kwargs_copy)
+            
+            # Log preload behavior
+            if not original_preload:
+                logger.debug(f"Forced preload=True for .xhdr compatibility (user requested preload={original_preload})")
+            
+            # Keep temp directory reference to prevent cleanup
+            # Store it as an attribute on the raw object so it persists
+            raw._brainvision_temp_dir = temp_dir
+            logger.debug(f"Keeping temp directory alive: {temp_dir}")
+            logger.debug(f"Temp files available at: {list(temp_dir_path.iterdir())}")
+            
+            logger.success(f"Successfully loaded cropped BrainVision file: {file_path.name}")
+            
+            return raw
                 
-                # Extract namespace if present
-                namespace = ''
-                if root.tag.startswith('{'):
-                    namespace = root.tag.split('}')[0] + '}'
-                
-                # Convert XML to .vhdr format
-                vhdr_content = BrainVisionLoader._convert_xml_to_vhdr(root, namespace, base_name)
-                
-                # Create temporary .vhdr file
-                temp_vhdr = temp_dir_path / f"{base_name}.vhdr"
-                temp_eeg = temp_dir_path / f"{base_name}.eeg"  
-                temp_vmrk = temp_dir_path / f"{base_name}.vmrk"
-                
-                # Write converted .vhdr content
-                with open(temp_vhdr, 'w', encoding='utf-8') as f:
-                    f.write(vhdr_content)
-                
-                # Copy data file (.dat -> .eeg)
-                orig_dat = file_path.parent / f"{base_name}.dat"
-                if orig_dat.exists():
-                    shutil.copy2(orig_dat, temp_eeg)
-                    logger.debug(f"Copied {orig_dat.name} -> {temp_eeg.name}")
-                else:
-                    raise FileNotFoundError(f"Data file not found: {orig_dat}")
-                
-                # Convert marker file (.xmrk -> .vmrk) 
-                orig_xmrk = file_path.parent / f"{base_name}.xmrk"
-                if orig_xmrk.exists():
-                    vmrk_content = BrainVisionLoader._convert_xmrk_to_vmrk(orig_xmrk, base_name)
-                    with open(temp_vmrk, 'w', encoding='utf-8') as f:
-                        f.write(vmrk_content)
-                    logger.debug(f"Converted {orig_xmrk.name} -> {temp_vmrk.name}")
-                else:
-                    logger.warning(f"Marker file not found: {orig_xmrk}")
-                    # Create empty marker file if missing
-                    with open(temp_vmrk, 'w', encoding='utf-8') as f:
-                        f.write("Brain Vision Data Exchange Marker File, Version 1.0\n")
-                
-                # Load using the temporary .vhdr file
-                # For .xhdr files, we must preload data while temporary files exist
-                # because MNE will try to access the files later after cleanup
-                kwargs_copy = kwargs.copy()
-                original_preload = kwargs_copy.get('preload', False)
-                kwargs_copy['preload'] = True
-                
-                raw = BrainVisionLoader._load_vhdr_file(temp_vhdr, **kwargs_copy)
-                
-                # Log preload behavior
-                if not original_preload:
-                    logger.debug(f"Forced preload=True for .xhdr compatibility (user requested preload={original_preload})")
-                
-                # Now the data is loaded into memory, safe to clean up temp files
-                logger.success(f"Successfully loaded cropped BrainVision file: {file_path.name}")
-                
-                return raw
-                
-            except ET.ParseError as e:
-                raise ValueError(f"Invalid XML in .xhdr file {file_path}: {e}")
-            except Exception as e:
-                logger.error(f"Failed to convert .xhdr file {file_path}: {e}")
-                raise
+        except ET.ParseError as e:
+            raise ValueError(f"Invalid XML in .xhdr file {file_path}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to convert .xhdr file {file_path}: {e}")
+            raise
 
     @staticmethod
     def _convert_xml_to_vhdr(root, namespace: str, base_name: str) -> str:

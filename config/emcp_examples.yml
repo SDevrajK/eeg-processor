@@ -1,0 +1,288 @@
+# EMCP (Eye Movement Correction Procedures) Configuration Examples
+#
+# This file provides comprehensive examples for configuring EMCP blink artifact
+# removal methods in EEG processing pipelines. Two methods are available:
+#
+# 1. EOG Regression: Uses MNE's EOGRegression method (standard approach)
+# 2. Gratton & Coles: Reference-agnostic linear regression method
+#
+# Both methods provide comprehensive quality tracking and visualization options.
+
+# =============================================================================
+# Example 1: Basic EOG Regression Configuration
+# =============================================================================
+basic_eog_regression:
+  raw_data_dir: "data/raw/"
+  results_dir: "results/eog_regression/"
+  file_extension: ".vhdr"
+  
+  participants:
+    - "sub-01.vhdr"
+    - "sub-02.vhdr"
+    - "sub-03.vhdr"
+  
+  stages:
+    - filter:
+        l_freq: 0.1
+        h_freq: 40
+        
+    - detect_bad_channels:
+        interpolate: true
+        
+    - remove_blinks_emcp:
+        method: "eog_regression"
+        eog_channels: ["HEOG", "VEOG"]
+        show_plot: false
+        verbose: false
+        
+    - rereference:
+        method: "average"
+        
+    - epoch:
+        tmin: -0.2
+        tmax: 0.8
+        baseline: [-0.1, 0]
+  
+  conditions:
+    - name: "Target"
+      condition_markers: [10, 20]
+    - name: "Distractor"
+      condition_markers: [30, 40]
+
+# =============================================================================
+# Example 2: Gratton & Coles Method Configuration
+# =============================================================================
+gratton_coles_method:
+  raw_data_dir: "data/raw/"
+  results_dir: "results/gratton_coles/"
+  file_extension: ".edf"
+  
+  participants:
+    sub-01:
+      file: "participant_001.edf"
+      conditions: ["baseline", "task"]
+    sub-02:
+      file: "participant_002.edf"
+      conditions: ["baseline", "task"]
+  
+  stages:
+    - filter:
+        l_freq: 0.5
+        h_freq: 30
+        
+    - detect_bad_channels:
+        interpolate: true
+        
+    - remove_blinks_emcp:
+        method: "gratton_coles"
+        eog_channels: ["HEOG", "VEOG"]
+        subtract_evoked: true
+        show_plot: false
+        verbose: true
+        
+    - rereference:
+        method: "average"
+  
+  conditions:
+    - name: "Baseline"
+      condition_markers: [1]
+    - name: "Task"
+      condition_markers: [2, 3]
+
+# =============================================================================
+# Example 3: Research Pipeline with Quality Control
+# =============================================================================
+research_pipeline_with_qc:
+  raw_data_dir: "data/eeg_experiment/"
+  results_dir: "results/research_qc/"
+  file_extension: ".vhdr"
+  dataset_name: "blink_correction_study"
+  
+  participants:
+    - "sub-001.vhdr"
+    - "sub-002.vhdr"
+    - "sub-003.vhdr"
+    - "sub-004.vhdr"
+    - "sub-005.vhdr"
+  
+  stages:
+    # Initial filtering
+    - filter:
+        l_freq: 0.1
+        h_freq: 100
+        notch_freq: 50
+        
+    # Bad channel detection and interpolation
+    - detect_bad_channels:
+        flat_threshold: 1e-15
+        noisy_threshold: 3.0
+        interpolate: true
+        
+    # High-pass filter before EMCP (recommended)
+    - filter:
+        l_freq: 0.5
+        h_freq: null  # Keep existing high-pass
+        
+    # EMCP blink correction with visualization
+    - remove_blinks_emcp:
+        method: "eog_regression"
+        eog_channels: ["HEOG", "VEOG"]
+        show_plot: true
+        plot_duration: 10.0
+        plot_start: 5.0
+        verbose: true
+        
+    # Re-referencing after artifact removal
+    - rereference:
+        method: "average"
+        exclude: []
+        
+    # Final low-pass filter
+    - filter:
+        l_freq: null
+        h_freq: 40
+        
+    # Epoching for ERP analysis
+    - epoch:
+        tmin: -0.2
+        tmax: 1.0
+        baseline: [-0.1, 0]
+        reject:
+          eeg: 100e-6
+        
+  conditions:
+    - name: "Standard"
+      condition_markers: [1, 11]
+    - name: "Deviant"
+      condition_markers: [2, 12]
+    - name: "Target"
+      condition_markers: [3, 13]
+
+# =============================================================================
+# Example 4: Comparison Study Configuration
+# =============================================================================
+method_comparison_study:
+  raw_data_dir: "data/comparison_study/"
+  results_dir: "results/method_comparison/"
+  file_extension: ".fif"
+  
+  participants:
+    - "subj01_run1.fif"
+    - "subj01_run2.fif"
+    - "subj02_run1.fif"
+    - "subj02_run2.fif"
+  
+  # Multiple processing variants for comparison
+  processing_variants:
+    # Variant 1: EOG Regression
+    eog_regression:
+      stages:
+        - filter: {l_freq: 0.1, h_freq: 40}
+        - detect_bad_channels: {interpolate: true}
+        - remove_blinks_emcp:
+            method: "eog_regression"
+            eog_channels: ["EOG061", "EOG062"]
+            show_plot: false
+        - rereference: {method: "average"}
+        - epoch: {tmin: -0.2, tmax: 0.8}
+    
+    # Variant 2: Gratton & Coles
+    gratton_coles:
+      stages:
+        - filter: {l_freq: 0.1, h_freq: 40}
+        - detect_bad_channels: {interpolate: true}
+        - remove_blinks_emcp:
+            method: "gratton_coles"
+            eog_channels: ["EOG061", "EOG062"]
+            subtract_evoked: true
+            show_plot: false
+        - rereference: {method: "average"}
+        - epoch: {tmin: -0.2, tmax: 0.8}
+    
+    # Variant 3: Gratton & Coles without evoked subtraction
+    gratton_coles_simple:
+      stages:
+        - filter: {l_freq: 0.1, h_freq: 40}
+        - detect_bad_channels: {interpolate: true}
+        - remove_blinks_emcp:
+            method: "gratton_coles"
+            eog_channels: ["EOG061", "EOG062"]
+            subtract_evoked: false
+            show_plot: false
+        - rereference: {method: "average"}
+        - epoch: {tmin: -0.2, tmax: 0.8}
+  
+  conditions:
+    - name: "Condition_A"
+      condition_markers: [1, 2]
+    - name: "Condition_B"
+      condition_markers: [3, 4]
+
+# =============================================================================
+# Example 5: Development and Debugging Configuration
+# =============================================================================
+debug_configuration:
+  raw_data_dir: "data/debug/"
+  results_dir: "results/debug/"
+  file_extension: ".vhdr"
+  
+  participants:
+    - "debug_subject.vhdr"
+  
+  stages:
+    - filter:
+        l_freq: 0.1
+        h_freq: 40
+        
+    - remove_blinks_emcp:
+        method: "eog_regression"
+        eog_channels: ["HEOG", "VEOG"]
+        show_plot: true
+        plot_duration: 30.0
+        plot_start: 10.0
+        verbose: true
+        
+  conditions: []
+
+# =============================================================================
+# Configuration Notes and Best Practices
+# =============================================================================
+
+# EMCP Method Selection Guidelines:
+#
+# EOG Regression Method:
+# - Use when you have standard EEG setups with good EOG channels
+# - Leverages MNE's well-tested implementation
+# - Good for most research applications
+# - Automatically handles reference schemes
+#
+# Gratton & Coles Method:
+# - Use when you need reference-agnostic processing
+# - Better for non-standard montages
+# - Historical method with extensive literature support
+# - More control over processing parameters
+# - Set subtract_evoked: true for enhanced artifact removal
+
+# EOG Channel Configuration:
+# - Always specify both horizontal and vertical EOG channels
+# - Common channel names: ["HEOG", "VEOG"], ["EOG1", "EOG2"], ["EOG061", "EOG062"]
+# - Ensure channel names match your data files exactly
+# - Order: [horizontal, vertical] is recommended
+
+# Pipeline Positioning:
+# - Apply EMCP after bad channel detection/interpolation
+# - Apply EMCP before ICA (if using both methods)
+# - Apply high-pass filtering (≥0.5 Hz) before EMCP
+# - Apply re-referencing after EMCP
+
+# Quality Control:
+# - Set show_plot: true during development and validation
+# - Use verbose: true for detailed logging
+# - Monitor correlation preservation metrics (should be >0.8)
+# - Check quality flags in generated reports
+
+# Performance Considerations:
+# - EOG regression is generally faster
+# - Gratton & Coles with evoked subtraction takes longer
+# - Both methods scale well with data length
+# - Consider processing time for large datasets

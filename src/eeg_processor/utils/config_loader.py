@@ -2,6 +2,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union, Any
 import yaml
+from loguru import logger
 from .exceptions import ConfigurationError, ValidationError
 from ..state_management.participant_handler import Participant
 
@@ -94,21 +95,78 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     if not isinstance(raw_config, dict):
         raise ValidationError("Configuration must be a dictionary")
     
-    # Validate required top-level keys for new structure
-    required_keys = ['study', 'participants', 'paths', 'processing']
-    missing_keys = [key for key in required_keys if key not in raw_config]
-    if missing_keys:
-        raise ValidationError(f"Missing required configuration keys: {missing_keys}")
+    # Handle both new and legacy configuration structures
+    # New structure: study, paths, participants, processing, conditions, output
+    # Legacy structure: raw_data_dir, results_dir, participants, stages, conditions
     
+    # Check if this is legacy format (has raw_data_dir or stages)
+    is_legacy = 'raw_data_dir' in raw_config or 'stages' in raw_config
+    
+    # Also check for legacy format inside paths section
     paths = raw_config.get('paths', {})
+    if isinstance(paths, dict) and ('raw_data_dir' in paths or 'results_dir' in paths):
+        is_legacy = True
+    
+    if is_legacy:
+        # Convert legacy paths structure first
+        if not paths:
+            paths = {}
+        
+        # Handle legacy paths at top level
+        if 'raw_data_dir' in raw_config:
+            paths['raw_data'] = raw_config['raw_data_dir']
+        if 'results_dir' in raw_config:
+            paths['results'] = raw_config['results_dir']
+        if 'file_extension' in raw_config:
+            paths['file_extension'] = raw_config['file_extension']
+            
+        # Handle legacy paths inside paths section
+        if 'raw_data_dir' in paths:
+            paths['raw_data'] = paths.pop('raw_data_dir')
+        if 'results_dir' in paths:
+            paths['results'] = paths.pop('results_dir')
+            
+        # Move participants out of paths section if it's there (test issue)
+        if 'participants' in paths:
+            raw_config['participants'] = paths.pop('participants')
+        
+        # Legacy format validation after moving participants
+        required_keys = ['participants']  # Only require participants for legacy
+        if 'stages' not in raw_config and 'processing' not in raw_config:
+            required_keys.append('processing or stages')
+            
+        # Check for missing required keys in legacy format
+        missing_keys = [key for key in required_keys if key not in raw_config]
+        if missing_keys:
+            raise ValidationError(f"Missing required configuration keys: {missing_keys}")
+        
+        # Handle legacy dataset_name
+        study_info = raw_config.get('study', {})
+        if 'dataset_name' in raw_config and 'dataset' not in study_info:
+            study_info['dataset'] = raw_config['dataset_name']
+        raw_config['study'] = study_info
+        
+        # Convert stages to processing if needed
+        if 'stages' in raw_config and 'processing' not in raw_config:
+            raw_config['processing'] = raw_config['stages']
+            
+    else:
+        # New structure validation
+        required_keys = ['study', 'participants', 'paths', 'processing']
+        missing_keys = [key for key in required_keys if key not in raw_config]
+        if missing_keys:
+            raise ValidationError(f"Missing required configuration keys: {missing_keys}")
+        
+        paths = raw_config.get('paths', {})
+    
     if not isinstance(paths, dict):
         raise ValidationError("'paths' must be a dictionary")
 
-    # Validate required path keys
-    required_path_keys = ['raw_data', 'results']
-    missing_path_keys = [key for key in required_path_keys if key not in paths]
-    if missing_path_keys:
-        raise ValidationError(f"Missing required path keys: {missing_path_keys}")
+    # Validate required path keys (support both old and new names)
+    if 'raw_data' not in paths:
+        raise ValidationError("Missing required path: 'raw_data' (should be converted from legacy format)")
+    if 'results' not in paths:
+        raise ValidationError("Missing required path: 'results' (should be converted from legacy format)")
     
     # Support legacy format for backward compatibility
     if 'processed' in paths and 'results' not in paths:
@@ -126,13 +184,35 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
 
     # Get raw data directory
     raw_data_dir = abs_paths.get('raw_data')
+    if not raw_data_dir:
+        raise ValidationError("Raw data directory path is required")
+    
+    raw_data_dir = Path(raw_data_dir)
     if not raw_data_dir.exists():
         raise ValidationError(f"Raw data directory does not exist: {raw_data_dir}")
 
     # Validate participants structure - support both simple and detailed formats
     participants_data = raw_config.get('participants', {})
-    if not isinstance(participants_data, dict) or not participants_data:
-        raise ValidationError("'participants' must be a non-empty dictionary")
+    if not participants_data:
+        raise ValidationError("'participants' section is required and cannot be empty")
+    
+    # Support both list format (simple) and dict format (detailed)
+    if isinstance(participants_data, list):
+        # Convert simple list to dict format for internal processing
+        participants_dict = {}
+        for p in participants_data:
+            if isinstance(p, str):
+                # Extract participant ID from filename
+                p_id = Path(p).stem
+                participants_dict[p_id] = p
+            else:
+                raise ValidationError(f"Participant entry must be string (filename), got {type(p)}")
+        participants_data = participants_dict
+    elif isinstance(participants_data, dict):
+        # Already in detailed format
+        pass
+    else:
+        raise ValidationError("'participants' must be a list of filenames or dictionary with participant details")
     
     # Validate each participant entry - handle both formats
     for participant_id, participant_info in participants_data.items():
@@ -157,6 +237,8 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     results_dir = abs_paths.get('results')
     if not results_dir:
         raise ValidationError("Results directory path is required")
+    
+    results_dir = Path(results_dir)
 
     # Validate conditions
     conditions = raw_config.get('conditions', [])
@@ -242,10 +324,3 @@ def _deep_merge_config(base_config: Dict[str, Any], override_config: Dict[str, A
     
     return result
 
-
-def get_participant_by_id(config: PipelineConfig, participant_id: str) -> Optional[Participant]:
-    """Get participant by ID from config"""
-    for participant in config.participants:
-        if participant.id == participant_id:
-            return participant
-    return None

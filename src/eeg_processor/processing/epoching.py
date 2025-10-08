@@ -1,8 +1,6 @@
 # Standard library
-from pathlib import Path
 from loguru import logger
 from typing import Dict, List, Optional, Union
-import yaml
 import mne
 from mne import Epochs
 from mne.io import BaseRaw
@@ -17,9 +15,11 @@ def create_epochs(raw: BaseRaw,
                   reject: Optional[Dict[str, float]] = None,
                   flat: Optional[Dict[str, float]] = None,
                   inplace: bool = False,  # Parameter for consistency, but ignored
+                  preload: bool = True,  # Control memory usage
+                  picks: Optional[Union[str, List[str]]] = None,  # Channel selection
                   **kwargs) -> Epochs:
     """
-    Create epochs from Raw data - always returns new Epochs object
+    Create epochs from Raw data following MNE best practices.
 
     Args:
         raw: Raw EEG data
@@ -31,6 +31,8 @@ def create_epochs(raw: BaseRaw,
         reject: Rejection thresholds (e.g., {'eeg': 100e-6})
         flat: Flat signal thresholds (e.g., {'eeg': 5e-6})
         inplace: Ignored - epoching always creates new object
+        preload: Whether to load epoch data into memory immediately
+        picks: Channel selection (None for all channels)
         **kwargs: Additional epoching parameters
 
     Returns:
@@ -42,83 +44,104 @@ def create_epochs(raw: BaseRaw,
     if inplace:
         logger.warning("inplace=True ignored for epoching - always creates new Epochs object")
 
-    # Set default rejection thresholds if not provided
-    default_reject = {
-        'eeg': 100e-6,
-        'Fp1': 1,  # High threshold (effectively ignored)
-        'Fp2': 1  # High threshold (effectively ignored)
-    }
-    default_flat = {'eeg': 5e-6}
+    # Set default rejection thresholds only for channel types present in the data
+    channel_types_in_data = set(ch['kind'] for ch in raw.info['chs'])
+    ch_type_mapping = {2: 'eeg', 202: 'eog', 102: 'emg'}  # FIFF channel type codes
+    
+    default_reject = {}
+    default_flat = {}
+    
+    # Only add rejection criteria for channel types that exist
+    for ch_type_code, ch_type_name in ch_type_mapping.items():
+        if ch_type_code in channel_types_in_data:
+            if ch_type_name == 'eeg':
+                default_reject[ch_type_name] = 100e-6  # 100 µV
+                default_flat[ch_type_name] = 1e-6      # 1 µV
+            elif ch_type_name == 'eog':
+                default_reject[ch_type_name] = 150e-6  # 150 µV
+                default_flat[ch_type_name] = 1e-6      # 1 µV
 
     reject_params = reject if reject is not None else (default_reject if reject_bad else None)
     flat_params = flat if flat is not None else (default_flat if reject_bad else None)
 
+    # Convert to proper data types
     if reject_params:
         reject_params = {key: float(value) for key, value in reject_params.items()}
     if flat_params:
         flat_params = {key: float(value) for key, value in flat_params.items()}
 
-    # Create event dictionary from condition
-    from mne import events_from_annotations
-    events, event_dict = events_from_annotations(raw)
-    event_id = {}
+    # Extract events from raw data
+    try:
+        events, event_dict = mne.events_from_annotations(raw)
+        if len(events) == 0:
+            logger.warning("No events found in raw data annotations")
+            # Try to find events in the data itself
+            events = mne.find_events(raw, shortest_event=1)
+            if len(events) == 0:
+                raise ValueError("No events found in raw data")
+    except Exception as e:
+        logger.error(f"Error extracting events: {e}")
+        raise
 
-    for key, value in condition['triggers'].items():
+    # Build event_id dictionary from condition
+    event_id = {}
+    triggers = condition.get('triggers', condition.get('epoch_events', {}))
+    
+    for key, value in triggers.items():
         if isinstance(value, dict):  # Nested case
             for sub_key, sub_value in value.items():
                 event_id[f"{sub_key}"] = int(sub_value)
         else:  # Flat case
-            event_id[key] = event_dict[str(value)]
+            if isinstance(value, str) and value in event_dict:
+                event_id[key] = event_dict[value]
+            else:
+                event_id[key] = int(value)
 
-    # Create epochs
-    epochs = Epochs(
-        raw,
-        events,
-        event_id=event_id,
-        tmin=tmin,
-        tmax=tmax,
-        baseline=baseline,
-        reject=reject_params,
-        flat=flat_params,
-        preload=True,
-        **kwargs
-    )
+    # Validate event_id
+    if not event_id:
+        raise ValueError("No valid event IDs found in condition")
 
-    logger.info(f"Created {len(epochs)} epochs from {len(event_id)} event types")
-    return epochs
+    # Check if events exist in the data
+    available_events = set(events[:, 2])
+    requested_events = set(event_id.values())
+    missing_events = requested_events - available_events
+    
+    if missing_events:
+        logger.warning(f"Events not found in data: {missing_events}")
+        # Filter out missing events
+        event_id = {k: v for k, v in event_id.items() if v in available_events}
+        
+    if not event_id:
+        raise ValueError("No requested events found in the data")
 
-def generate_annotations_from_config(raw, condition):
-    """
-    Dynamically generate MNE annotations based on nested event groups in YAML.
-
-    Args:
-        raw: MNE Raw object containing EEG data.
-        condition: Dictionary defining condition with nested event groups.
-
-    Returns:
-        MNE Raw object with annotations added (if applicable).
-    """
-    annotations_list = []
-
-    # Check if the event groups are nested
-    if any(isinstance(events, dict) for events in condition.get("epoch_events", {}).values()):
-        for event_type, events in condition["epoch_events"].items():
-            if isinstance(events, dict):  # Only process nested dictionaries
-                for event_label, event_code in events.items():
-                    from mne import Epochs, events_from_annotations
-                    event_times, _ = events_from_annotations(raw)
-                    for time in event_times[:, 0]:
-                        annotations_list.append((time, 0.1, f"{event_type}_{event_label}"))  # Mark event type
-
-        # Convert annotations list to MNE Annotations object
-        annotations = mne.Annotations(
-            onset=[entry[0] for entry in annotations_list],
-            duration=[entry[1] for entry in annotations_list],
-            description=[entry[2] for entry in annotations_list]
+    # Create epochs using MNE constructor
+    try:
+        epochs = Epochs(
+            raw,
+            events=events,
+            event_id=event_id,
+            tmin=tmin,
+            tmax=tmax,
+            baseline=baseline,
+            picks=picks,
+            reject=reject_params,
+            flat=flat_params,
+            preload=preload,
+            verbose=False,  # Control verbosity
+            **kwargs
         )
-        raw.set_annotations(annotations)
-
-    return raw  # Return modified raw data (with annotations if nested)
+        
+        logger.info(f"Created {len(epochs)} epochs from {len(event_id)} event types")
+        logger.info(f"Event types: {list(event_id.keys())}")
+        
+        # Add participant metadata to epochs if available in raw data
+        _add_participant_metadata_to_epochs(epochs, raw)
+        
+        return epochs
+        
+    except Exception as e:
+        logger.error(f"Error creating epochs: {e}")
+        raise
 
 
 import pandas as pd
@@ -137,7 +160,8 @@ def extract_event_metadata(epochs, condition):
     """
     # Create mapping from event codes to their labels and types
     code_map = {}
-    for event_type, events in condition.get('epoch_events', {}).items():
+    triggers = condition.get('triggers', {}) or condition.get('epoch_events', {})
+    for event_type, events in triggers.items():
         if isinstance(events, dict):
             # Nested structure (e.g., Standards: {A: 1, B: 2})
             for label, code in events.items():
@@ -161,3 +185,54 @@ def extract_event_metadata(epochs, condition):
         })
 
     return pd.DataFrame(metadata_entries)
+
+
+def _add_participant_metadata_to_epochs(epochs, raw):
+    """
+    Add participant metadata from raw data to epochs.metadata DataFrame.
+    
+    Args:
+        epochs: MNE Epochs object to add metadata to
+        raw: Raw object containing participant metadata in subject_info
+    """
+    try:
+        # Extract participant metadata from raw subject_info
+        subject_info = raw.info.get('subject_info')
+        if not subject_info:
+            return
+            
+        his_id = subject_info.get('his_id')
+        if not his_id or '|' not in his_id:
+            return
+            
+        # Parse metadata from his_id
+        parts = his_id.split('|')
+        participant_id = parts[0]
+        participant_metadata = {}
+        
+        for part in parts[1:]:
+            if '=' in part:
+                key, value = part.split('=', 1)
+                participant_metadata[key] = value
+        
+        if not participant_metadata:
+            return
+            
+        # Create metadata DataFrame for epochs
+        n_epochs = len(epochs)
+        epochs_metadata = pd.DataFrame({
+            'participant_id': [participant_id] * n_epochs,
+            **{key: [value] * n_epochs for key, value in participant_metadata.items()},
+            'epoch_number': range(n_epochs)
+        })
+        
+        # Add to epochs
+        epochs.metadata = epochs_metadata
+        
+        logger.debug(f"Added participant metadata to {n_epochs} epochs")
+        logger.debug(f"  Participant: {participant_id}")
+        logger.debug(f"  Metadata keys: {list(participant_metadata.keys())}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to add participant metadata to epochs: {e}")
+        # Don't raise - this is non-critical functionality

@@ -15,8 +15,10 @@ class DataProcessor:
         self.stage_registry = {
             # Data handling
             "crop": self._crop,
+            "crop_participant_segment": self._crop_participant_segment,
             "adjust_events": self._adjust_event_times,
-            "correct_triggers": self._correct_triggers, 
+            "correct_triggers": self._correct_triggers,
+            "segment_condition": self._segment_by_condition,
 
             # Pre-processing
             "filter": self._apply_filter,
@@ -24,17 +26,20 @@ class DataProcessor:
             "detect_bad_channels": self._detect_bad_channels,
             "rereference": self._rereference,
             "remove_artifacts": self._remove_artifacts,
+            "remove_blinks_emcp": self._remove_blinks_emcp,
             "clean_rawdata_asr": self._clean_rawdata_asr,
             "blink_artifact": self._remove_artifacts,  # Legacy alias
 
             # Condition handling
-            "segment_condition": self._segment_condition,
             "epoch": self._epoch_data,
 
             # Post-epoching
             "time_frequency": self._time_frequency_analysis,
             "time_frequency_raw": self._time_frequency_raw_analysis,
             "time_frequency_average": self._time_frequency_average,
+
+            # I/O operations
+            "save_raw": self._save_raw,
 
             # Other
             "view": self._view_data
@@ -174,28 +179,53 @@ class DataProcessor:
             **kwargs
         )
 
-    ## --- Condition Handling --- ##
-
-    def _segment_condition(self, data: BaseRaw,
-                           padding: float = 5.0,
-                           inplace: bool = False,
-                           **kwargs) -> BaseRaw:
-        """Condition segmentation with inplace parameter passed to external function"""
-        if not self.current_condition:
-            raise ValueError("Condition must be set for segmentation")
+    def _remove_blinks_emcp(self, data: BaseRaw,
+                            method: str = "eog_regression",
+                            eog_channels: List[str] = ['HEOG', 'VEOG'],
+                            inplace: bool = False,
+                            **kwargs) -> BaseRaw:
+        """
+        Remove blink artifacts using Eye Movement Correction Procedures (EMCP).
         
-        # Check if markers is None - prevent segmentation for conditions without markers
-        if self.current_condition.get('markers') is None:
-            raise ValueError("segment_condition cannot be used with conditions that have markers: None")
+        Supports two methods:
+        - "eog_regression": MNE's EOGRegression method (standard approach)
+        - "gratton_coles": Reference-agnostic Gratton & Coles (1983) method
+        
+        Args:
+            data: Raw EEG data with EOG channels
+            method: EMCP method to use ("eog_regression" or "gratton_coles")
+            eog_channels: List of EOG channel names for blink detection
+            inplace: Ignored - EMCP always creates new object
+            **kwargs: Additional parameters passed to selected method
+            
+        Returns:
+            Raw object with blink artifacts removed
+            
+        Raises:
+            ValueError: If method is unknown or EOG channels are missing
+        """
+        if method not in ["eog_regression", "gratton_coles"]:
+            raise ValueError(f"Unknown EMCP method: {method}. "
+                           f"Available methods: 'eog_regression', 'gratton_coles'")
+        
+        if method == "eog_regression":
+            from ..processing.emcp import remove_blinks_eog_regression
+            return remove_blinks_eog_regression(
+                raw=data,
+                eog_channels=eog_channels,
+                inplace=inplace,
+                **kwargs
+            )
+        elif method == "gratton_coles":
+            from ..processing.emcp import remove_blinks_gratton_coles
+            return remove_blinks_gratton_coles(
+                raw=data,
+                eog_channels=eog_channels,
+                inplace=inplace,
+                **kwargs
+            )
 
-        from ..utils.raw_data_tools import segment_by_condition_markers
-        return segment_by_condition_markers(
-            raw=data,
-            condition=self.current_condition,
-            padding=padding,
-            inplace=inplace,
-            **kwargs
-        )
+    ## --- Condition Handling --- ##
 
     def _epoch_data(self,
                     data: BaseRaw,
@@ -339,3 +369,31 @@ class DataProcessor:
         from ..processing.visualization import plot_stage
         plot_stage(data, **kwargs)
         return data  # Return unchanged for chaining
+
+    def _save_raw(self, data: Union[BaseRaw, Epochs], inplace: bool = False, **kwargs) -> Union[BaseRaw, Epochs]:
+        """Save raw or epochs data - inplace parameter ignored"""
+        from ..processing.io_operations import save_raw
+        
+        # Set output directory from config if not specified
+        if 'output_dir' not in kwargs and hasattr(self, '_results_dir'):
+            kwargs['output_dir'] = self._results_dir
+            
+        return save_raw(data, **kwargs)
+
+    def _crop_participant_segment(self, data: BaseRaw, inplace: bool = False, **kwargs) -> BaseRaw:
+        """Crop using participant-specific metadata"""
+        from ..processing.io_operations import crop_participant_segment
+        
+        # participant_info is already in kwargs from the pipeline
+        # Just pass everything through
+        return crop_participant_segment(data, **kwargs)
+
+    def _segment_by_condition(self, data: BaseRaw, inplace: bool = False, **kwargs) -> BaseRaw:
+        """Segment raw data based on condition markers"""
+        from ..processing.segmentation import segment_by_condition_markers
+        
+        # Get current condition from processor state
+        if not self.current_condition:
+            raise ValueError("No condition set for segmentation. This stage requires condition information.")
+        
+        return segment_by_condition_markers(data, condition=self.current_condition, inplace=inplace, **kwargs)

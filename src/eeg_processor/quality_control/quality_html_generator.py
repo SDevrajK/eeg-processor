@@ -259,6 +259,8 @@ class QualityHTMLGenerator:
             
         if self.pipeline_info['has_ica']:
             features.append("ICA artifact removal")
+        if self.pipeline_info['has_emcp']:
+            features.append("EMCP blink correction")
         if self.pipeline_info['has_asr']:
             features.append("ASR artifact correction")
         if self.pipeline_info['has_bad_channels']:
@@ -273,6 +275,7 @@ class QualityHTMLGenerator:
             'filter',
             'detect_bad_channels',
             'clean_rawdata_asr',
+            'remove_blinks_emcp',
             'rereference',
             'blink_artifact',
             'epoch',
@@ -291,6 +294,7 @@ class QualityHTMLGenerator:
             'filter': 'Filter', 
             'detect_bad_channels': 'Bad Channels',
             'clean_rawdata_asr': 'ASR',
+            'remove_blinks_emcp': 'EMCP',
             'rereference': 'Re-reference',
             'blink_artifact': 'ICA',
             'epoch': 'Epoch',

@@ -1,0 +1,78 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Sync to Windows",
+            "type": "shell",
+            "command": "rsync",
+            "args": [
+                "-av",
+                "--delete",
+                "--exclude=.venv/",
+                "--exclude=__pycache__/",
+                "--exclude=*.pyc",
+                "--exclude=.pytest_cache/",
+                "--exclude=.git/",
+                "./",
+                "/mnt/c/Users/sayee/Documents/Research/PythonCode/EEG_Processor/"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Sync WSL project to Windows folder"
+        },
+        {
+            "label": "Sync from Windows",
+            "type": "shell",
+            "command": "rsync",
+            "args": [
+                "-av",
+                "--delete",
+                "--exclude=.venv/",
+                "--exclude=__pycache__/",
+                "--exclude=*.pyc",
+                "--exclude=.pytest_cache/",
+                "--exclude=.git/",
+                "/mnt/c/Users/sayee/Documents/Research/PythonCode/EEG_Processor/",
+                "./"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Sync Windows folder to WSL project"
+        },
+        {
+            "label": "Check Sync Status",
+            "type": "shell",
+            "command": "echo 'Comparing WSL and Windows directories...' && rsync -av --dry-run --delete --exclude=.venv/ --exclude=__pycache__/ --exclude=*.pyc --exclude=.pytest_cache/ --exclude=.git/ ./ /mnt/c/Users/sayee/Documents/Research/PythonCode/EEG_Processor/ | grep -v 'sending incremental file list' | head -20",
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "new",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Preview what would be synced without making changes"
+        }
+    ]
+}

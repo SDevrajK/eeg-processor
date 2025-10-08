@@ -49,7 +49,7 @@ class QualityTracker:
     def track_stage_data(self, input_data, output_data, stage_name: str,
                          participant_id: str, condition_name: str, memory_metrics: dict = None):
         """
-        Main entry point for stage quality tracking.
+        Main entry point for stage quality tracking with enhanced memory analysis.
 
         Intelligently extracts metrics based on stage type and available data.
         """
@@ -60,13 +60,15 @@ class QualityTracker:
             metrics = self._extract_stage_metrics(input_data, output_data, stage_name)
 
             if memory_metrics:
-                metrics['memory'] = memory_metrics
-
-                # Log memory warnings
-                pressure_level = memory_metrics.get('pressure_level', 'normal')
-                if pressure_level in ['warning', 'critical']:
-                    logger.warning(f"Memory pressure {pressure_level} after {stage_name}: "
-                                   f"{memory_metrics['memory_after']['used_percent']:.1f}% system memory")
+                # Simple memory tracking
+                memory_data = self._extract_memory_metrics(memory_metrics)
+                metrics['memory'] = memory_data
+                
+                # Check for memory issues with user-friendly messages
+                memory_issues = self._detect_memory_issues(memory_data)
+                if memory_issues:
+                    for issue in memory_issues:
+                        logger.warning(f"{stage_name}: {issue}")
 
             if metrics:
                 # Store the metrics
@@ -102,6 +104,9 @@ class QualityTracker:
 
         elif stage_name == "rereference":
             return self._extract_reference_metrics(output_data)
+
+        elif stage_name == "remove_blinks_emcp":
+            return self._extract_emcp_metrics(output_data)
 
         elif stage_name in ["crop", "adjust_events", "segment_condition"]:
             return self._extract_generic_metrics(input_data, output_data, stage_name)
@@ -156,19 +161,35 @@ class QualityTracker:
 
         # Extract detailed rejection information
         drop_log = epochs_data.drop_log
-        total_epochs = len(drop_log)
-        rejected_epochs = sum(1 for log in drop_log if len(log) > 0)
-        rejection_rate = (rejected_epochs / total_epochs) * 100 if total_epochs > 0 else 0
-
-        # Count rejection reasons
+        raw_total_epochs = len(drop_log)
+        
+        # Count only actually rejected epochs, excluding 'IGNORED' entries
+        rejected_epochs = 0
         rejection_reasons = {}
+        
         for log in drop_log:
-            for reason in log:
-                rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+            if len(log) > 0:
+                # Filter out 'IGNORED' entries - these are not actual rejections
+                actual_reasons = [reason for reason in log if reason != 'IGNORED']
+                if actual_reasons:
+                    rejected_epochs += 1
+                    for reason in actual_reasons:
+                        rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+        
+        kept_epochs = len(epochs_data)
+        
+        # Calculate actual total from kept + rejected to handle drop_log inconsistencies
+        actual_total_epochs = kept_epochs + rejected_epochs
+        rejection_rate = (rejected_epochs / actual_total_epochs) * 100 if actual_total_epochs > 0 else 0
+
+        # Log warning if there's a mismatch between drop_log and actual epochs
+        if raw_total_epochs != actual_total_epochs:
+            logger.warning(f"Drop log length ({raw_total_epochs}) doesn't match actual epochs processed "
+                         f"({actual_total_epochs}). Using actual count for accurate metrics.")
 
         return {
-            'total_epochs': total_epochs,
-            'kept_epochs': len(epochs_data),
+            'total_epochs': actual_total_epochs,
+            'kept_epochs': kept_epochs,
             'rejected_epochs': rejected_epochs,
             'rejection_rate': round(rejection_rate, 2),
             'rejection_reasons': rejection_reasons,
@@ -227,6 +248,26 @@ class QualityTracker:
             'reference_type': str(ref_info) if ref_info else 'standard',
             'n_channels': len(output_data.ch_names),
             'method': 'reference_info_extraction'
+        }
+
+    def _extract_emcp_metrics(self, output_data) -> Dict[str, Any]:
+        """Extract essential EMCP blink correction metrics"""
+        
+        # Check if processing function stored detailed metrics
+        if hasattr(output_data, '_emcp_metrics'):
+            metrics = output_data._emcp_metrics.copy()
+            logger.debug(f"Found stored EMCP metrics: {metrics['method']} method, "
+                        f"{metrics['blink_events']} blinks, correlation: {metrics['mean_correlation']}")
+            return metrics
+        
+        # Minimal fallback for when no detailed metrics are available
+        logger.debug("Using minimal EMCP fallback metrics")
+        return {
+            'emcp_applied': True,
+            'method': 'unknown',
+            'correction_applied': True,
+            'quality_flags': {'no_stored_metrics': True},
+            'note': 'EMCP completed but no detailed metrics stored'
         }
 
     def _extract_generic_metrics(self, input_data, output_data, stage_name: str) -> Dict[str, Any]:
@@ -339,9 +380,35 @@ class QualityTracker:
         except KeyError:
             return {'components_removed': 0, 'eog_components': [], 'ecg_components': []}
 
+    def _extract_memory_metrics(self, memory_metrics: dict) -> Dict[str, Any]:
+        """Extract simple memory metrics for user-friendly reporting"""
+        return {
+            'before_mb': memory_metrics.get('memory_before_mb', 0),
+            'after_mb': memory_metrics.get('memory_after_mb', 0),
+            'delta_mb': memory_metrics.get('memory_delta_mb', 0),
+            'total_mb': memory_metrics.get('total_memory_mb', 0)
+        }
+
+    def _detect_memory_issues(self, memory_data: dict) -> List[str]:
+        """Detect memory issues in user-friendly terms"""
+        issues = []
+        
+        # Check for high memory usage
+        if memory_data.get('total_mb', 0) > 8000:  # 8GB
+            issues.append(f"High memory usage: {memory_data['total_mb']/1024:.1f} GB")
+        
+        # Check for large memory increases
+        if memory_data.get('delta_mb', 0) > 2000:  # 2GB
+            issues.append(f"Large memory increase: {memory_data['delta_mb']:.0f} MB")
+        
+        return issues
+
     def save_metrics(self):
-        """Export metrics to JSON file"""
+        """Export metrics to JSON file with enhanced memory analysis summary"""
         metrics_file = self.quality_dir / "quality_metrics.json"
+
+        # Generate memory analysis summary
+        memory_summary = self._generate_memory_analysis_summary()
 
         # Add summary statistics
         summary_data = {
@@ -351,6 +418,7 @@ class QualityTracker:
                 'end_time': datetime.now().isoformat(),
                 'completed_participants': sum(1 for p in self.metrics.values() if p.get('completed', False))
             },
+            'memory_analysis_summary': memory_summary,
             'participants': self.metrics
         }
 
@@ -358,7 +426,85 @@ class QualityTracker:
             json.dump(summary_data, f, indent=2, default=str)
 
         logger.info(f"Quality metrics saved to: {metrics_file}")
+        logger.info(f"Memory analysis summary: {memory_summary}")
         return metrics_file
+
+    def _generate_memory_analysis_summary(self) -> Dict[str, Any]:
+        """Generate comprehensive memory analysis summary across all participants and stages"""
+        try:
+            memory_summary = {
+                'total_stages_analyzed': 0,
+                'stages_with_high_memory': 0,
+                'stages_with_leaks': 0,
+                'stages_with_inefficient_use': 0,
+                'average_memory_delta_mb': 0,
+                'max_memory_delta_mb': 0,
+                'memory_efficiency_scores': [],
+                'problematic_stages': [],
+                'memory_issues_by_stage': {}
+            }
+            
+            total_memory_delta = 0
+            max_delta = 0
+            
+            for participant_id, participant_data in self.metrics.items():
+                for condition_name, condition_data in participant_data.get('conditions', {}).items():
+                    for stage_name, stage_data in condition_data.get('stages', {}).items():
+                        memory_data = stage_data.get('metrics', {}).get('memory', {})
+                        
+                        if memory_data:
+                            memory_summary['total_stages_analyzed'] += 1
+                            
+                            # Extract memory metrics
+                            if 'memory_analysis' in memory_data:
+                                analysis = memory_data['memory_analysis']
+                                delta_mb = analysis.get('rss_delta_mb', 0)
+                                efficiency = analysis.get('efficiency_score', 0)
+                                
+                                total_memory_delta += delta_mb
+                                max_delta = max(max_delta, delta_mb)
+                                memory_summary['memory_efficiency_scores'].append(efficiency)
+                                
+                                # Check for issues
+                                flags = analysis.get('analysis_flags', {})
+                                if flags.get('high_memory_usage'):
+                                    memory_summary['stages_with_high_memory'] += 1
+                                if flags.get('potential_leak'):
+                                    memory_summary['stages_with_leaks'] += 1
+                                if flags.get('inefficient_memory_use'):
+                                    memory_summary['stages_with_inefficient_use'] += 1
+                                    
+                            # Track memory issues by stage
+                            memory_issues = stage_data.get('metrics', {}).get('memory_issues', [])
+                            if memory_issues:
+                                if stage_name not in memory_summary['memory_issues_by_stage']:
+                                    memory_summary['memory_issues_by_stage'][stage_name] = []
+                                memory_summary['memory_issues_by_stage'][stage_name].extend(memory_issues)
+                                
+                                # Add to problematic stages
+                                stage_key = f"{participant_id}/{condition_name}/{stage_name}"
+                                memory_summary['problematic_stages'].append({
+                                    'stage_key': stage_key,
+                                    'issues': memory_issues
+                                })
+            
+            # Calculate averages
+            if memory_summary['total_stages_analyzed'] > 0:
+                memory_summary['average_memory_delta_mb'] = total_memory_delta / memory_summary['total_stages_analyzed']
+                memory_summary['max_memory_delta_mb'] = max_delta
+                
+            if memory_summary['memory_efficiency_scores']:
+                memory_summary['average_efficiency_score'] = np.mean(memory_summary['memory_efficiency_scores'])
+                memory_summary['min_efficiency_score'] = np.min(memory_summary['memory_efficiency_scores'])
+                
+            # Remove raw efficiency scores from summary to save space
+            memory_summary.pop('memory_efficiency_scores', None)
+                
+            return memory_summary
+            
+        except Exception as e:
+            logger.error(f"Error generating memory analysis summary: {e}")
+            return {'error': str(e)}
 
 
 # Keep the existing helper functions for backward compatibility
@@ -380,18 +526,30 @@ def extract_bad_channel_metrics(raw, stage_result=None) -> Dict:
 def extract_epoch_metrics(epochs) -> Dict:
     """Legacy function - use QualityTracker.track_stage_data instead"""
     if hasattr(epochs, 'drop_log'):
-        total_epochs = len(epochs.drop_log)
-        rejected_epochs = sum(1 for log in epochs.drop_log if len(log) > 0)
-        rejection_rate = (rejected_epochs / total_epochs) * 100 if total_epochs > 0 else 0
-
+        raw_total_epochs = len(epochs.drop_log)
+        
+        # Count only actually rejected epochs, excluding 'IGNORED' entries
+        rejected_epochs = 0
         rejection_reasons = {}
+        
         for log in epochs.drop_log:
-            for reason in log:
-                rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+            if len(log) > 0:
+                # Filter out 'IGNORED' entries - these are not actual rejections
+                actual_reasons = [reason for reason in log if reason != 'IGNORED']
+                if actual_reasons:
+                    rejected_epochs += 1
+                    for reason in actual_reasons:
+                        rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+        
+        kept_epochs = len(epochs)
+        
+        # Use actual total (kept + rejected) instead of drop_log length for accurate metrics
+        actual_total_epochs = kept_epochs + rejected_epochs
+        rejection_rate = (rejected_epochs / actual_total_epochs) * 100 if actual_total_epochs > 0 else 0
 
         return {
-            'total_epochs': total_epochs,
-            'kept_epochs': len(epochs),
+            'total_epochs': actual_total_epochs,
+            'kept_epochs': kept_epochs,
             'rejected_epochs': rejected_epochs,
             'rejection_rate': round(rejection_rate, 2),
             'rejection_reasons': rejection_reasons

@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_remove_blinks_emcp.json",
+  "title": "EEG Processor - remove_blinks_emcp Stage",
+  "description": "Remove blink artifacts using MNE's EOGRegression method. This method uses MNE's EOGRegression class to identify and remove blink artifacts from EEG data. **IMPORTANT: For EEG data, apply the desired reference (typically average reference) before using this method, as recommended by MNE.**",
+  "type": "object",
+  "properties": {
+    "eog_channels": {
+      "type": "array",
+      "default": "['HEOG', 'VEOG']"
+    },
+    "show_plot": {
+      "type": "boolean",
+      "default": false
+    },
+    "plot_duration": {
+      "type": "number",
+      "default": 10.0
+    },
+    "plot_start": {
+      "type": "number",
+      "default": 5.0
+    },
+    "verbose": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "examples": [
+    {
+      "method": "eog_regression",
+      "eog_channels": [
+        "HEOG",
+        "VEOG"
+      ]
+    },
+    {
+      "method": "gratton_coles",
+      "eog_channels": [
+        "HEOG"
+      ],
+      "subtract_evoked": true
+    }
+  ],
+  "additionalProperties": false
+}
