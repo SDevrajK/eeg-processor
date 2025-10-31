@@ -191,36 +191,77 @@ Legacy configurations will continue to work but should be migrated to the new st
 
 ## Artifact Removal Methods
 
+### EOG Regression (Recommended for Blinks)
+```yaml
+# For Epoched ERP Data (Gratton & Coles 1983)
+processing:
+  - epoch: {tmin: -0.2, tmax: 0.8}
+  - remove_artifacts:
+      method: "regression"
+      eog_channels: ["HEOG", "VEOG"]
+      subtract_evoked: true  # Preserves ERPs
+
+# For Continuous Data
+processing:
+  - rereference: {method: "average"}  # Required before regression
+  - remove_artifacts:
+      method: "regression"
+      eog_channels: ["HEOG", "VEOG"]
+```
+- **Best for**: Blink artifacts with EOG channels available
+- **Speed**: Fast (~15s vs ~60-120s for ICA)
+- **Features**: Deterministic, preserves ERPs (Gratton & Coles method)
+- **Data Types**: Supports both Raw and Epochs
+- **BrainVision Analyzer Compatible**: Matches epoched workflow
+
 ### ICA (Independent Component Analysis)
 ```yaml
-stages:
-  - remove_artifacts: {method: "ica"}
+processing:
+  - remove_artifacts:
+      method: "ica"
+      n_components: 15
+      auto_classify: true
 ```
-- **Best for**: Eye blinks, heartbeat, muscle artifacts
+- **Best for**: Multiple artifact types (blinks + muscle + heartbeat)
 - **Features**: Automatic component classification with ICALabel
+- **Speed**: Slower but comprehensive
 
 ### ASR (Artifact Subspace Reconstruction)
 ```yaml
-stages:
+processing:
   - clean_rawdata_asr: {cutoff: 20, method: "euclid"}
 ```
 - **Best for**: Brief high-amplitude artifacts, motion artifacts
 - **Key Parameters**: `cutoff` (10-30 recommended), `method` ("euclid"/"riemann")
 
-### EMCP (Eye Movement Correction Procedures)
+### EMCP - DEPRECATED
 ```yaml
-stages:
+# OLD (deprecated - use remove_artifacts with method='regression' instead)
+processing:
   - remove_blinks_emcp: {method: "eog_regression", eog_channels: ["HEOG", "VEOG"]}
-  # OR
-  - remove_blinks_emcp: {method: "gratton_coles", eog_channels: ["HEOG", "VEOG"]}
 ```
-- **Methods**: `eog_regression` (standard) or `gratton_coles` (reference-agnostic)
-- **Best for**: Blink artifact correction when EOG channels available
+⚠️ **Deprecated**: Use `remove_artifacts` with `method="regression"` instead
+
+### Regression vs. ICA Decision Guide
+
+**Use Regression when:**
+- ✅ EOG channels available
+- ✅ Primarily blink artifacts
+- ✅ Epoched data workflow (BrainVision Analyzer compatibility)
+- ✅ Speed/efficiency important
+- ✅ Deterministic results preferred
+
+**Use ICA when:**
+- ✅ Multiple artifact types (blinks + muscle + heartbeat + line noise)
+- ✅ No EOG channels
+- ✅ Maximum correction quality needed
+- ✅ Continuous data workflow
 
 ### Recommended Pipeline Order
-1. **ASR** - Early continuous data artifact correction
-2. **EMCP** - Blink correction (after bad channels, before rereferencing)  
-3. **ICA** - Component-based artifacts (after EMCP)
+1. **ASR** - Early continuous data artifact correction (optional)
+2. **Regression or ICA** - Primary artifact removal
+   - Regression: After rereferencing (for Raw) or after epoching (for Epochs)
+   - ICA: Before epoching (continuous data only)
 
 ## Architecture Overview
 

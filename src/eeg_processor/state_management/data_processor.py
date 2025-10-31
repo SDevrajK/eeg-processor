@@ -34,6 +34,8 @@ class DataProcessor:
             "epoch": self._epoch_data,
 
             # Post-epoching
+            "apply_baseline": self._apply_baseline_correction,
+            "reject_epochs": self._reject_bad_epochs,
             "time_frequency": self._time_frequency_analysis,
             "time_frequency_raw": self._time_frequency_raw_analysis,
             "time_frequency_average": self._time_frequency_average,
@@ -137,18 +139,32 @@ class DataProcessor:
         from ..processing.rereferencing import set_reference
         return set_reference(data, method=method, exclude=exclude or [], inplace=inplace, **kwargs)
 
-    def _remove_artifacts(self, data: BaseRaw,
+    def _remove_artifacts(self, data: Union[BaseRaw, Epochs],
                           method: str = "ica",
                           inplace: bool = False,
-                          **kwargs) -> BaseRaw:
-        """Artifact removal with inplace parameter passed to external function"""
+                          **kwargs) -> Union[BaseRaw, Epochs]:
+        """
+        Artifact removal with support for both Raw and Epochs data.
+
+        Args:
+            data: Raw or Epochs object to clean
+            method: Artifact removal method ('ica' or 'regression')
+            inplace: Ignored - passed to processing functions which handle warning
+            **kwargs: Method-specific parameters
+
+        Returns:
+            Cleaned data (same type as input)
+
+        Note:
+            The 'regression' method supports both Raw and Epochs data with automatic
+            handling of evoked responses for ERP analysis.
+        """
         if method == "ica":
             from ..processing.ica import remove_artifacts_ica
             return remove_artifacts_ica(raw=data, inplace=inplace, **kwargs)
         elif method == "regression":
-            # Keep for backward compatibility but recommend ICA
-            logger.warning("Regression method is deprecated. Consider using ICA method instead.")
-            raise NotImplementedError("Regression method currently unavailable")
+            from ..processing.regression import remove_artifacts_regression
+            return remove_artifacts_regression(data=data, inplace=inplace, **kwargs)
         else:
             raise ValueError(f"Unknown artifact removal method: {method}. Available: 'ica', 'regression'")
 
@@ -179,51 +195,51 @@ class DataProcessor:
             **kwargs
         )
 
-    def _remove_blinks_emcp(self, data: BaseRaw,
+    def _remove_blinks_emcp(self, data: Union[BaseRaw, Epochs],
                             method: str = "eog_regression",
                             eog_channels: List[str] = ['HEOG', 'VEOG'],
                             inplace: bool = False,
-                            **kwargs) -> BaseRaw:
+                            **kwargs) -> Union[BaseRaw, Epochs]:
         """
-        Remove blink artifacts using Eye Movement Correction Procedures (EMCP).
-        
-        Supports two methods:
-        - "eog_regression": MNE's EOGRegression method (standard approach)
-        - "gratton_coles": Reference-agnostic Gratton & Coles (1983) method
-        
+        DEPRECATED: Remove blink artifacts using Eye Movement Correction Procedures (EMCP).
+
+        .. deprecated::
+            The 'remove_blinks_emcp' stage is deprecated. Use 'remove_artifacts' with
+            method='regression' instead. This provides the same functionality with better
+            integration and support for both Raw and Epochs data.
+
+        This function now forwards to the new regression-based artifact removal for
+        backward compatibility.
+
         Args:
-            data: Raw EEG data with EOG channels
-            method: EMCP method to use ("eog_regression" or "gratton_coles")
+            data: Raw or Epochs EEG data with EOG channels
+            method: Ignored - now uses regression method
             eog_channels: List of EOG channel names for blink detection
-            inplace: Ignored - EMCP always creates new object
-            **kwargs: Additional parameters passed to selected method
-            
+            inplace: Ignored - always creates new object
+            **kwargs: Additional parameters passed to regression method
+
         Returns:
-            Raw object with blink artifacts removed
-            
-        Raises:
-            ValueError: If method is unknown or EOG channels are missing
+            Cleaned data (same type as input)
+
+        Migration Guide:
+            Old: remove_blinks_emcp(method='eog_regression', eog_channels=['HEOG', 'VEOG'])
+            New: remove_artifacts(method='regression', eog_channels=['HEOG', 'VEOG'])
         """
-        if method not in ["eog_regression", "gratton_coles"]:
-            raise ValueError(f"Unknown EMCP method: {method}. "
-                           f"Available methods: 'eog_regression', 'gratton_coles'")
-        
-        if method == "eog_regression":
-            from ..processing.emcp import remove_blinks_eog_regression
-            return remove_blinks_eog_regression(
-                raw=data,
-                eog_channels=eog_channels,
-                inplace=inplace,
-                **kwargs
-            )
-        elif method == "gratton_coles":
-            from ..processing.emcp import remove_blinks_gratton_coles
-            return remove_blinks_gratton_coles(
-                raw=data,
-                eog_channels=eog_channels,
-                inplace=inplace,
-                **kwargs
-            )
+        # Issue deprecation warning
+        logger.warning(
+            "Stage 'remove_blinks_emcp' is deprecated and will be removed in a future version. "
+            "Use 'remove_artifacts' with method='regression' instead. "
+            "Example: {'remove_artifacts': {'method': 'regression', 'eog_channels': ['HEOG', 'VEOG']}}"
+        )
+
+        # Forward to new regression method for backward compatibility
+        return self._remove_artifacts(
+            data=data,
+            method='regression',
+            eog_channels=eog_channels,
+            inplace=inplace,
+            **kwargs
+        )
 
     ## --- Condition Handling --- ##
 
@@ -246,6 +262,50 @@ class DataProcessor:
             tmax=tmax,
             baseline=baseline,
             inplace=inplace,
+            **kwargs
+        )
+
+    def _apply_baseline_correction(self,
+                                    data: Epochs,
+                                    baseline=(None, 0),
+                                    inplace: bool = False,
+                                    **kwargs) -> Epochs:
+        """Apply baseline correction to existing Epochs"""
+        from ..processing.apply_baseline import apply_baseline_correction
+
+        # Note: apply_baseline_correction modifies in-place, but we respect
+        # the inplace parameter by copying first if needed
+        if not inplace:
+            data = data.copy()
+
+        return apply_baseline_correction(
+            epochs=data,
+            baseline=baseline,
+            **kwargs
+        )
+
+    def _reject_bad_epochs(self,
+                          data: Epochs,
+                          reject: Optional[Dict[str, float]] = None,
+                          flat: Optional[Dict[str, float]] = None,
+                          check_gradient: bool = False,
+                          gradient_threshold: Optional[float] = None,
+                          inplace: bool = False,
+                          **kwargs) -> Epochs:
+        """Apply artifact rejection to existing Epochs"""
+        from ..processing.reject_epochs import reject_bad_epochs
+
+        # Note: reject_bad_epochs modifies in-place, but we respect
+        # the inplace parameter by copying first if needed
+        if not inplace:
+            data = data.copy()
+
+        return reject_bad_epochs(
+            epochs=data,
+            reject=reject,
+            flat=flat,
+            check_gradient=check_gradient,
+            gradient_threshold=gradient_threshold,
             **kwargs
         )
 

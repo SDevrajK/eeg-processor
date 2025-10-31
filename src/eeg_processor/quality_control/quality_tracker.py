@@ -108,6 +108,10 @@ class QualityTracker:
         elif stage_name == "remove_blinks_emcp":
             return self._extract_emcp_metrics(output_data)
 
+        elif stage_name == "remove_artifacts":
+            # Handle both ICA and regression methods
+            return self._extract_remove_artifacts_metrics(output_data)
+
         elif stage_name in ["crop", "adjust_events", "segment_condition"]:
             return self._extract_generic_metrics(input_data, output_data, stage_name)
 
@@ -252,14 +256,14 @@ class QualityTracker:
 
     def _extract_emcp_metrics(self, output_data) -> Dict[str, Any]:
         """Extract essential EMCP blink correction metrics"""
-        
+
         # Check if processing function stored detailed metrics
         if hasattr(output_data, '_emcp_metrics'):
             metrics = output_data._emcp_metrics.copy()
             logger.debug(f"Found stored EMCP metrics: {metrics['method']} method, "
                         f"{metrics['blink_events']} blinks, correlation: {metrics['mean_correlation']}")
             return metrics
-        
+
         # Minimal fallback for when no detailed metrics are available
         logger.debug("Using minimal EMCP fallback metrics")
         return {
@@ -268,6 +272,36 @@ class QualityTracker:
             'correction_applied': True,
             'quality_flags': {'no_stored_metrics': True},
             'note': 'EMCP completed but no detailed metrics stored'
+        }
+
+    def _extract_remove_artifacts_metrics(self, output_data) -> Dict[str, Any]:
+        """Extract artifact removal metrics (handles both ICA and regression methods)"""
+
+        # Check for regression metrics first
+        if hasattr(output_data, '_regression_metrics'):
+            metrics = output_data._regression_metrics.copy()
+            mean_corr = metrics.get('artifact_reduction', {}).get('mean_correlation_preserved', 'N/A')
+            logger.debug(
+                f"Found stored regression metrics: {metrics['implementation']} implementation, "
+                f"correlation preserved: {mean_corr}"
+            )
+            return metrics
+
+        # Check for ICA metrics
+        if hasattr(output_data, '_ica_metrics'):
+            metrics = output_data._ica_metrics.copy()
+            logger.debug(
+                f"Found stored ICA metrics: {metrics.get('n_components_excluded', 0)} components excluded"
+            )
+            return metrics
+
+        # Minimal fallback for when no detailed metrics are available
+        logger.debug("Using minimal artifact removal fallback metrics")
+        return {
+            'correction_applied': True,
+            'method': 'unknown',
+            'quality_flags': {'no_stored_metrics': True},
+            'note': 'Artifact removal completed but no detailed metrics stored'
         }
 
     def _extract_generic_metrics(self, input_data, output_data, stage_name: str) -> Dict[str, Any]:

@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Union, Any
 import numpy as np
 import mne
 from mne.io import BaseRaw
-from mne import Epochs, Evoked
+from mne import BaseEpochs, Evoked
 from mne.time_frequency import AverageTFR, Spectrum, RawTFR
 from loguru import logger
 
@@ -49,7 +49,7 @@ class EEGPipeline:
         self.participant_handler: Optional[ParticipantHandler] = None
         self.result_saver: Optional[ResultSaver] = None
         self._current_raw: Optional[BaseRaw] = None
-        self._current_epochs: Optional[Epochs] = None
+        self._current_epochs: Optional[BaseEpochs] = None
         self._current_evoked: Optional[Evoked] = None
         self.quality_tracker: Optional[QualityTracker] = None
 
@@ -110,8 +110,8 @@ class EEGPipeline:
         self.quality_tracker.save_metrics()
         logger.success("Quality metrics saved. Run generate_quality_reports() to create HTML reports.")
 
-    def apply_stage(self, data: Union[BaseRaw, Epochs, Evoked], stage_name: str, 
-                    condition: Optional[dict] = None, **params) -> Union[BaseRaw, Epochs, Evoked]:
+    def apply_stage(self, data: Union[BaseRaw, BaseEpochs, Evoked], stage_name: str,
+                    condition: Optional[dict] = None, **params) -> Union[BaseRaw, BaseEpochs, Evoked]:
         """Apply a processing stage - for interactive use."""
         # Set interactive mode (no in-place operations)
         self.processor.set_batch_mode(False)
@@ -253,8 +253,8 @@ class EEGPipeline:
     # PRIVATE METHODS - STAGE PROCESSING
     # ==========================================
 
-    def _process_stage(self, current_data, stage_name: str, stage_params: dict, condition: dict, 
-                      participant, epochs_created: bool, stage_tracker) -> Union[BaseRaw, Epochs, Evoked, dict]:
+    def _process_stage(self, current_data, stage_name: str, stage_params: dict, condition: dict,
+                      participant, epochs_created: bool, stage_tracker) -> Union[BaseRaw, BaseEpochs, Evoked, dict]:
         """Process a single pipeline stage."""
         logger.debug(f"Applying stage: {stage_name}")
         
@@ -310,26 +310,43 @@ class EEGPipeline:
     def _prepare_stage_data(self, current_data, stage_name: str, condition: dict, epochs_created: bool) -> List[tuple]:
         """Prepare data items for stage processing."""
         # Early return for non-epoched data or epoch stage
-        if not epochs_created or not isinstance(current_data, Epochs) or stage_name == "epoch":
+        if not epochs_created or stage_name == "epoch":
             return [(None, current_data)]
-            
-        # Post-epoching: process each trigger separately
-        triggers = condition['triggers']
-        data_items = []
-        
-        logger.info(f"Processing {stage_name} for {len(triggers)} trigger types: {list(triggers.keys())}")
-        
-        for trigger_name, trigger_code in triggers.items():
-            trigger_epochs = self._extract_trigger_epochs(current_data, trigger_name, trigger_code)
-            if trigger_epochs is not None and len(trigger_epochs) > 0:
-                data_items.append((trigger_name, trigger_epochs))
-                
-        return data_items
+
+        # Handle dict of trigger-specific epochs (from previous multi-trigger stage)
+        if isinstance(current_data, dict):
+            logger.info(f"Processing {stage_name} for {len(current_data)} pre-split triggers: {list(current_data.keys())}")
+            return [(trigger_name, epochs_data) for trigger_name, epochs_data in current_data.items()]
+
+        # Handle single Epochs object - split by triggers
+        if isinstance(current_data, BaseEpochs):
+            # Post-epoching: process each trigger separately
+            triggers = condition['triggers']
+            data_items = []
+
+            logger.info(f"Processing {stage_name} for {len(triggers)} trigger types: {list(triggers.keys())}")
+
+            for trigger_name, trigger_code in triggers.items():
+                trigger_epochs = self._extract_trigger_epochs(current_data, trigger_name, trigger_code)
+                if trigger_epochs is not None and len(trigger_epochs) > 0:
+                    data_items.append((trigger_name, trigger_epochs))
+
+            return data_items
+
+        # Default: pass through as-is
+        return [(None, current_data)]
 
     def _handle_type_transition(self, current_data, new_data, previous_type: type, current_type: type,
                                stage_params: dict, participant_id: str, condition: dict, clear_raw_after_epoching: bool):
         """Handle data type transitions and cleanup."""
         should_save = stage_params.get('save', True)
+
+        # Special case: Don't save epochs at type transition if followed by baseline/rejection
+        # Epochs will be saved at finalization after all processing is complete
+        if previous_type == BaseRaw and current_type in [BaseEpochs, dict]:
+            logger.debug("Skipping epoch save at type transition - will save after all post-epoch stages complete")
+            should_save = False
+
         if should_save:
             self._save_interim_data(current_data, participant_id, condition, previous_type)
 
@@ -338,7 +355,7 @@ class EEGPipeline:
             return
             
         # Special handling for Raw -> Epochs transition
-        if clear_raw_after_epoching and previous_type == BaseRaw and current_type == Epochs:
+        if clear_raw_after_epoching and previous_type == BaseRaw and current_type == BaseEpochs:
             self._cleanup_raw_after_epoching(current_data)
             return
             
@@ -377,7 +394,7 @@ class EEGPipeline:
                                               error=f"Stage '{failed_stage}' failed: {str(error)}")
         logger.error(f"Condition '{condition['name']}' failed at stage '{failed_stage}' for {participant_id}: {str(error)}")
 
-    def _track_stage_quality(self, input_data: Union[BaseRaw, Epochs, Evoked], output_data: Union[BaseRaw, Epochs, Evoked], 
+    def _track_stage_quality(self, input_data: Union[BaseRaw, BaseEpochs, Evoked], output_data: Union[BaseRaw, BaseEpochs, Evoked], 
                            stage_name: str, participant_id: str, condition: dict, memory_metrics: dict) -> None:
         """Minimal quality tracking - delegates to QualityTracker."""
         if self.quality_tracker:
@@ -407,7 +424,7 @@ class EEGPipeline:
             stage_params = {}
         return stage_name, stage_params
 
-    def _extract_trigger_epochs(self, epochs: Epochs, trigger_name: str, trigger_code: Union[int, str]) -> Optional[Epochs]:
+    def _extract_trigger_epochs(self, epochs: BaseEpochs, trigger_name: str, trigger_code: Union[int, str]) -> Optional[BaseEpochs]:
         """Extract epochs for a specific trigger type using MNE's built-in selection."""
         try:
             # Use trigger name directly as selection key
@@ -438,13 +455,14 @@ class EEGPipeline:
                 logger.error(f"Error extracting epochs for trigger '{trigger_name}': {e}")
                 return None
 
-    def _save_interim_data(self, data: Union[BaseRaw, Epochs, Evoked, Dict], participant_id: str, condition: dict, data_type: type) -> None:
+    def _save_interim_data(self, data: Union[BaseRaw, BaseEpochs, Evoked, Dict], participant_id: str, condition: dict, data_type: type) -> None:
         """Save interim data based on type using the updated ResultSaver."""
         # Handle multi-trigger results (dictionary of trigger_name -> data)
         if isinstance(data, dict):
             logger.debug(f"Saving {len(data)} trigger-specific results")
             for trigger_name, trigger_data in data.items():
-                if type(trigger_data) in [Epochs, Evoked, AverageTFR, Spectrum, RawTFR]:
+                # Use isinstance to handle subclasses (e.g., EpochsArray is a subclass of BaseEpochs)
+                if isinstance(trigger_data, (BaseEpochs, Evoked, AverageTFR, Spectrum, RawTFR)):
                     logger.debug(f"Saving {type(trigger_data).__name__} for trigger '{trigger_name}'")
                     self.result_saver.save_data_object(
                         data_object=trigger_data,
@@ -452,18 +470,18 @@ class EEGPipeline:
                         condition_name=condition['name'],
                         event_type=trigger_name
                     )
-        elif data_type in [Epochs, Evoked, AverageTFR, Spectrum, RawTFR]:
+        elif data_type in [BaseEpochs, Evoked, AverageTFR, Spectrum, RawTFR]:
             self.result_saver.save_data_object(
                 data_object=data,
                 participant_id=participant_id,
                 condition_name=condition["name"]
             )
 
-    def _update_pipeline_state(self, data: Union[BaseRaw, Epochs, Evoked, Dict]) -> None:
+    def _update_pipeline_state(self, data: Union[BaseRaw, BaseEpochs, Evoked, Dict]) -> None:
         """Update internal state tracking."""
         data_type_mapping = {
             BaseRaw: '_current_raw',
-            Epochs: '_current_epochs', 
+            BaseEpochs: '_current_epochs',
             Evoked: '_current_evoked'
         }
         
@@ -632,11 +650,11 @@ class EEGPipeline:
         self._current_raw = value
 
     @property
-    def current_epochs(self) -> Optional[Epochs]:
+    def current_epochs(self) -> Optional[BaseEpochs]:
         """Get current epochs object."""
         return self._current_epochs
 
     @current_epochs.setter
-    def current_epochs(self, value: Optional[Epochs]) -> None:
+    def current_epochs(self, value: Optional[BaseEpochs]) -> None:
         """Set current epochs object."""
         self._current_epochs = value
