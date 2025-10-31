@@ -10,13 +10,29 @@ This project is developed across Windows and WSL2 environments. This document ou
 **Windows Mirror**: `C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor`
 **Remote Repository**: https://github.com/SDevrajK/eeg-processor.git
 
+### Development Tools
+
+**Primary IDE**: Visual Studio Code with WSL2 integration
+**Git Interface**: VSCode's built-in Git integration (Source Control panel)
+**Terminal**: WSL2 bash terminal within VSCode
+
 ### Recommended Workflow
 
 #### Option 1: WSL as Primary (Recommended)
 
 Use WSL2 as your primary development environment and treat the Windows copy as a mirror for Windows-specific testing.
 
-**Development cycle:**
+**Development cycle using VSCode:**
+1. Open project in VSCode using WSL: `code /home/sdevrajk/projects/eeg-processor`
+2. Make changes and save files
+3. Use Source Control panel (Ctrl+Shift+G) to:
+   - Review changes
+   - Stage files (click + icon)
+   - Write commit message
+   - Commit (click ✓ icon)
+   - Push to GitHub (click "Sync Changes" or ... → Push)
+
+**Alternative: Command line workflow**
 ```bash
 # In WSL2
 cd /home/sdevrajk/projects/eeg-processor
@@ -103,6 +119,139 @@ cd EEG_Processor
 # Install dependencies
 pip install -e .
 ```
+
+### Git Authentication Setup
+
+#### Configuring Your Git Identity
+
+First, set your actual Git credentials (not Claude Code's):
+
+```bash
+# Set your name and email
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# Or set only for this repository
+cd /home/sdevrajk/projects/eeg-processor
+git config user.name "Your Name"
+git config user.email "your.email@example.com"
+```
+
+#### GitHub Authentication Options
+
+VSCode's Git integration sometimes fails to push due to authentication issues. Here are solutions:
+
+**Option 1: GitHub Personal Access Token (Recommended for VSCode)**
+
+1. Create a Personal Access Token on GitHub:
+   - Go to https://github.com/settings/tokens
+   - Click "Generate new token (classic)"
+   - Give it a name: "VSCode WSL2"
+   - Select scopes: `repo` (all), `workflow`
+   - Click "Generate token"
+   - **COPY THE TOKEN** - you won't see it again!
+
+2. Configure Git to use the token:
+   ```bash
+   # Store credentials (saves to ~/.git-credentials)
+   git config --global credential.helper store
+
+   # Next push will prompt for credentials
+   # Username: your-github-username
+   # Password: paste-your-token (not your GitHub password!)
+   ```
+
+3. Test authentication:
+   ```bash
+   git push origin main
+   ```
+
+**Option 2: SSH Keys (More Secure, No Expiration)**
+
+1. Generate SSH key in WSL2:
+   ```bash
+   ssh-keygen -t ed25519 -C "your.email@example.com"
+   # Press Enter to accept default location
+   # Optionally set a passphrase
+   ```
+
+2. Add SSH key to GitHub:
+   ```bash
+   # Copy public key
+   cat ~/.ssh/id_ed25519.pub
+   # Copy the output
+   ```
+   - Go to https://github.com/settings/keys
+   - Click "New SSH key"
+   - Paste your public key
+   - Click "Add SSH key"
+
+3. Change remote URL to SSH:
+   ```bash
+   cd /home/sdevrajk/projects/eeg-processor
+   git remote set-url origin git@github.com:SDevrajK/eeg-processor.git
+   ```
+
+4. Test connection:
+   ```bash
+   ssh -T git@github.com
+   # Should see: "Hi username! You've successfully authenticated..."
+   ```
+
+**Option 3: VSCode GitHub Extension**
+
+VSCode can authenticate directly with GitHub:
+
+1. Install "GitHub Pull Requests and Issues" extension (usually pre-installed)
+2. Click "Sign in to GitHub" when prompted in VSCode
+3. Follow the browser authentication flow
+4. VSCode will handle authentication automatically
+
+#### Troubleshooting Push Failures
+
+**If VSCode push fails:**
+
+1. Try pushing from integrated terminal:
+   ```bash
+   cd /home/sdevrajk/projects/eeg-processor
+   git push origin main
+   ```
+   - If prompted for credentials, enter your username and token (not password)
+   - Credentials will be saved for future pushes
+
+2. Check authentication status:
+   ```bash
+   git config --list | grep credential
+   git config --list | grep user
+   git remote -v
+   ```
+
+3. Clear cached credentials if needed:
+   ```bash
+   # Remove stored credentials
+   rm ~/.git-credentials
+
+   # Or use credential helper to erase
+   git credential reject
+   # Then enter:
+   # protocol=https
+   # host=github.com
+   # [press Enter twice]
+   ```
+
+4. Verify remote URL format:
+   ```bash
+   git remote -v
+   # Should show either:
+   # https://github.com/SDevrajK/eeg-processor.git (for token)
+   # git@github.com:SDevrajK/eeg-processor.git (for SSH)
+   ```
+
+**If authentication keeps failing:**
+- Close and reopen VSCode
+- Reload the WSL window (Ctrl+Shift+P → "Remote-WSL: Reopen Folder in WSL")
+- Use the terminal `git push` as a fallback
+- Check GitHub for rate limiting or account issues
 
 ### File Synchronization Best Practices
 
