@@ -105,7 +105,14 @@ class QualityFlagger:
             if emcp_flags:
                 flags.extend(emcp_flags)
                 flag_level = self._escalate_flag_level(flag_level, emcp_level)
-                
+
+        # Check regression artifact removal issues (if regression was used)
+        if self.pipeline_info.get('has_regression', False):
+            regression_flags, regression_level = self._check_regression_correction(participant_data)
+            if regression_flags:
+                flags.extend(regression_flags)
+                flag_level = self._escalate_flag_level(flag_level, regression_level)
+
         return {
             'participant_id': participant_id,
             'flag_level': flag_level,
@@ -308,7 +315,51 @@ class QualityFlagger:
             if 'remove_blinks_emcp' in stages:
                 return stages['remove_blinks_emcp'].get('metrics', {})
         return {}
-    
+
+    def _check_regression_correction(self, participant_data: Dict) -> Tuple[List[str], str]:
+        """Check for regression-based artifact removal issues."""
+        flags = []
+        flag_level = 'good'
+
+        # Extract regression metrics from any condition
+        regression_metrics = self._get_regression_metrics(participant_data)
+
+        if regression_metrics:
+            # Check quality flags from the regression metrics
+            quality_flags = regression_metrics.get('quality_flags', {})
+
+            # Critical: Very low correlation suggests severe overcorrection
+            if quality_flags.get('low_correlation', False):
+                mean_corr = regression_metrics.get('artifact_reduction', {}).get('mean_correlation_preserved', 0)
+                flags.append(f"Regression low correlation (signal preservation: {mean_corr:.2f})")
+                flag_level = 'critical'
+
+            # Warning: Extreme regression coefficients
+            if quality_flags.get('extreme_coefficients', False):
+                max_coeff = regression_metrics.get('regression_coefficients', {}).get('max_coeff', 0)
+                flags.append(f"Regression extreme coefficients (max: {max_coeff:.3f})")
+                if flag_level == 'good':
+                    flag_level = 'warning'
+
+            # Info: Minimal correction applied (might indicate no artifacts present)
+            if quality_flags.get('minimal_correction', False):
+                flags.append("Regression minimal correction applied (check if artifacts were present)")
+                # Don't escalate flag level - this is informational
+
+        return flags, flag_level
+
+    def _get_regression_metrics(self, participant_data: Dict) -> Dict:
+        """Extract regression artifact removal metrics from participant data."""
+        # Look for regression metrics in any condition
+        for condition_data in participant_data['conditions'].values():
+            stages = condition_data.get('stages', {})
+            if 'remove_artifacts' in stages:
+                metrics = stages['remove_artifacts'].get('metrics', {})
+                # Check if this is regression method (not ICA)
+                if metrics.get('method') == 'regression':
+                    return metrics
+        return {}
+
     def _escalate_flag_level(self, current_level: str, new_level: str) -> str:
         """Escalate flag level to the more severe one."""
         priority = {'good': 0, 'warning': 1, 'critical': 2}

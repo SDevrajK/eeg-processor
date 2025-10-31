@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_reject_epochs.json",
+  "title": "EEG Processor - reject_epochs Stage",
+  "description": "Apply artifact rejection to existing Epochs based on amplitude criteria. Supports BrainVision Analyzer-compatible rejection with peak-to-peak amplitude (reject) and minimum activity (flat) thresholds. Gradient-based rejection is planned for future implementation.",
+  "type": "object",
+  "properties": {
+    "reject": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "eeg": {"type": "number", "minimum": 0},
+            "eog": {"type": "number", "minimum": 0},
+            "ecg": {"type": "number", "minimum": 0},
+            "emg": {"type": "number", "minimum": 0},
+            "mag": {"type": "number", "minimum": 0},
+            "grad": {"type": "number", "minimum": 0}
+          },
+          "additionalProperties": false
+        }
+      ],
+      "default": null,
+      "description": "Rejection thresholds based on maximum peak-to-peak (PTP) amplitude in Volts. Epochs exceeding these thresholds are rejected. BrainVision Analyzer equivalent: 'Maximal allowed difference' (typically 200e-6 for EEG). Example: {'eeg': 100e-6} rejects epochs with PTP > 100 µV."
+    },
+    "flat": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "eeg": {"type": "number", "minimum": 0},
+            "eog": {"type": "number", "minimum": 0},
+            "ecg": {"type": "number", "minimum": 0},
+            "emg": {"type": "number", "minimum": 0},
+            "mag": {"type": "number", "minimum": 0},
+            "grad": {"type": "number", "minimum": 0}
+          },
+          "additionalProperties": false
+        }
+      ],
+      "default": null,
+      "description": "Rejection thresholds based on minimum peak-to-peak (PTP) amplitude in Volts. Epochs below these thresholds are rejected (flat/disconnected channels). BrainVision Analyzer equivalent: 'Lowest allowed activity' (typically 0.5e-6 for EEG). Example: {'eeg': 1e-6} rejects epochs with PTP < 1 µV."
+    },
+    "check_gradient": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable gradient-based rejection (NOT YET IMPLEMENTED). Will check for sharp voltage changes exceeding gradient_threshold. BrainVision Analyzer equivalent: 'Maximal allowed voltage step' (50 µV/ms). Catches electrode pops and disconnections. Currently a placeholder for future development."
+    },
+    "gradient_threshold": {
+      "type": ["number", "null"],
+      "default": null,
+      "minimum": 0,
+      "description": "Maximum allowed voltage gradient in µV/ms (e.g., 50.0). Only used if check_gradient=true. BrainVision Analyzer default: 50 µV/ms. NOT YET IMPLEMENTED."
+    },
+    "verbose": {
+      "type": ["boolean", "string", "null"],
+      "default": null,
+      "description": "Verbosity level. true/false for enable/disable, or MNE verbosity string."
+    }
+  },
+  "examples": [
+    {
+      "description": "Basic amplitude-based rejection",
+      "reject": {"eeg": 100e-6},
+      "flat": {"eeg": 1e-6}
+    },
+    {
+      "description": "BrainVision Analyzer-compatible settings",
+      "reject": {"eeg": 200e-6},
+      "flat": {"eeg": 0.5e-6}
+    },
+    {
+      "description": "Strict rejection for clean datasets",
+      "reject": {"eeg": 75e-6, "eog": 250e-6},
+      "flat": {"eeg": 0.5e-6}
+    },
+    {
+      "description": "Future: with gradient checking (not yet implemented)",
+      "reject": {"eeg": 200e-6},
+      "flat": {"eeg": 0.5e-6},
+      "check_gradient": true,
+      "gradient_threshold": 50.0
+    }
+  ],
+  "additionalProperties": false
+}

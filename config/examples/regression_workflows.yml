@@ -1,0 +1,300 @@
+# EOG Regression Workflow Examples
+#
+# This file demonstrates configuration examples for EOG regression-based
+# blink correction using the remove_artifacts stage with method='regression'.
+#
+# See PRD: docs/PRD-EOG-Regression-Blink-Correction.md for details.
+
+---
+
+# ============================================================================
+# Example 1: Epoched ERP Workflow (BrainVision Analyzer Compatible)
+# ============================================================================
+#
+# This workflow matches the BrainVision Analyzer pipeline:
+# Raw → Segmentation (Epoching) → OcularCorrection → Baseline → Rejection
+#
+# Key: Uses Gratton & Coles (1983) method with evoked subtraction to preserve ERPs
+
+study:
+  name: "ERP_Study_With_Regression"
+  dataset: "target_detection"
+  description: "P300 target detection task with EOG regression blink correction"
+
+paths:
+  raw_data: "data/raw/"
+  results: "results/"
+  file_extension: ".vhdr"
+
+participants:
+  - "sub-01.vhdr"
+  - "sub-02.vhdr"
+  - "sub-03.vhdr"
+
+processing:
+  # 1. Basic preprocessing
+  - filter: {l_freq: 0.1, h_freq: 40}
+  - detect_bad_channels: {interpolate: true}
+  - rereference: {method: "average"}
+
+  # 2. Epoch FIRST (before artifact correction)
+  - epoch:
+      tmin: -0.2
+      tmax: 0.8
+      event_id: {standard: 1, target: 2}
+      baseline: null  # No baseline yet - will apply after correction
+
+  # 3. EOG regression with Gratton & Coles method
+  - remove_artifacts:
+      method: "regression"
+      eog_channels: ['HEOG', 'VEOG']
+      subtract_evoked: true  # KEY: Preserves ERPs while removing blinks
+      show_plot: false
+
+  # 4. Re-apply baseline after regression (recommended by MNE-Python)
+  - apply_baseline:
+      baseline: [-0.2, 0]
+
+  # 5. Apply artifact rejection (BrainVision Analyzer compatible)
+  - reject_epochs:
+      reject: {eeg: 200e-6}  # Max difference: 200 µV
+      flat: {eeg: 0.5e-6}    # Min activity: 0.5 µV
+      # check_gradient: true  # Future: 50 µV/ms (not yet implemented)
+
+conditions:
+  - name: "Standard"
+    condition_markers: [1, 11]
+  - name: "Target"
+    condition_markers: [2, 12]
+
+output:
+  save_intermediates: false
+  create_report: true
+
+---
+
+# ============================================================================
+# Example 2: Continuous Data Workflow (Traditional Preprocessing)
+# ============================================================================
+#
+# This workflow applies regression to continuous data BEFORE epoching.
+# Useful when you want to clean the raw data first.
+
+study:
+  name: "Continuous_Regression_Study"
+  dataset: "resting_state"
+  description: "Resting state EEG with continuous regression correction"
+
+paths:
+  raw_data: "data/raw/"
+  results: "results/"
+  file_extension: ".edf"
+
+participants:
+  - "participant_01.edf"
+  - "participant_02.edf"
+
+processing:
+  # 1. Basic preprocessing
+  - filter: {l_freq: 1.0, h_freq: 40}
+  - detect_bad_channels: {interpolate: true}
+  - rereference: {method: "average"}  # REQUIRED before regression
+
+  # 2. EOG regression on continuous data
+  - remove_artifacts:
+      method: "regression"
+      eog_channels: ['HEOG', 'VEOG']
+      show_plot: false
+      # Note: subtract_evoked is ignored for Raw data
+
+  # 3. Then epoch if needed for analysis
+  - epoch:
+      tmin: -0.2
+      tmax: 0.8
+      event_id: {eyes_open: 10, eyes_closed: 20}
+      baseline: (-0.2, 0)
+
+conditions:
+  - name: "EyesOpen"
+    condition_markers: [10]
+  - name: "EyesClosed"
+    condition_markers: [20]
+
+output:
+  save_intermediates: true
+  create_report: true
+
+---
+
+# ============================================================================
+# Example 3: Comparison - Regression vs ICA
+# ============================================================================
+#
+# This demonstrates how to switch between methods for comparison.
+
+study:
+  name: "Method_Comparison"
+  dataset: "comparison_test"
+
+paths:
+  raw_data: "data/raw/"
+  results: "results/"
+  file_extension: ".fif"
+
+participants:
+  - "sample_data.fif"
+
+# Configuration A: EOG Regression (Fast, Deterministic)
+processing:
+  - filter: {l_freq: 0.1, h_freq: 40}
+  - detect_bad_channels: {interpolate: true}
+  - rereference: {method: "average"}
+  - remove_artifacts:
+      method: "regression"  # ← Change this to "ica" for ICA method
+      eog_channels: ['HEOG', 'VEOG']
+      subtract_evoked: true
+
+# Configuration B: ICA (Comprehensive, Multiple Artifacts)
+# processing:
+#   - filter: {l_freq: 1.0, h_freq: 40}
+#   - detect_bad_channels: {interpolate: true}
+#   - rereference: {method: "average"}
+#   - remove_artifacts:
+#       method: "ica"  # ← ICA method
+#       n_components: 15
+#       auto_classify: true
+#       eog_channels: ['HEOG', 'VEOG']
+
+conditions:
+  - name: "AllData"
+    condition_markers: [1]
+
+---
+
+# ============================================================================
+# Example 4: Migrating from remove_blinks_emcp (Deprecated)
+# ============================================================================
+#
+# If you have existing configs using remove_blinks_emcp, migrate to the
+# new unified remove_artifacts interface.
+
+# OLD CONFIGURATION (deprecated):
+# processing:
+#   - filter: {l_freq: 0.1, h_freq: 40}
+#   - rereference: {method: "average"}
+#   - remove_blinks_emcp:
+#       method: "eog_regression"
+#       eog_channels: ['HEOG', 'VEOG']
+
+# NEW CONFIGURATION (recommended):
+processing:
+  - filter: {l_freq: 0.1, h_freq: 40}
+  - rereference: {method: "average"}
+  - remove_artifacts:
+      method: "regression"  # Replaces "eog_regression" and "gratton_coles"
+      eog_channels: ['HEOG', 'VEOG']
+      subtract_evoked: true  # For epoched data with ERPs
+
+# Note: remove_blinks_emcp will continue to work with a deprecation warning,
+# but it forwards to the new remove_artifacts implementation.
+
+---
+
+# ============================================================================
+# When to Use Regression vs. ICA
+# ============================================================================
+#
+# Use EOG Regression when:
+#   ✓ EOG channels are available
+#   ✓ Primarily blink artifacts (not muscle/cardiac)
+#   ✓ Epoched data workflow needed (BrainVision Analyzer compatibility)
+#   ✓ Speed/efficiency is important (~10s vs ~60-120s for ICA)
+#   ✓ Deterministic results preferred (no random seed)
+#
+# Use ICA when:
+#   ✓ Multiple artifact types (blinks + muscle + heartbeat + line noise)
+#   ✓ No EOG channels available
+#   ✓ Maximum correction quality needed
+#   ✓ Continuous data workflow
+#   ✓ Automatic classification desired (ICALabel)
+
+---
+
+# ============================================================================
+# Key Parameters
+# ============================================================================
+#
+# method: "regression"
+#   - Selects EOG regression instead of ICA
+#
+# eog_channels: ['HEOG', 'VEOG']
+#   - REQUIRED for regression method
+#   - Can be auto-detected if not specified (searches for 'EOG' channels)
+#   - Use horizontal and vertical EOG for best results
+#
+# subtract_evoked: true
+#   - For Epochs: Implements Gratton & Coles (1983) method
+#   - Subtracts evoked response before fitting regression
+#   - Preserves stimulus-locked ERP components
+#   - Ignored for Raw data (always false)
+#   - Default: true
+#
+# show_plot: false
+#   - Display before/after comparison plots
+#   - Useful for quality checking
+#   - Default: false
+#
+# plot_duration: 10.0
+#   - Duration of plot in seconds (Raw data only)
+#   - Default: 10.0
+#
+# plot_start: 5.0
+#   - Start time for plot in seconds (Raw data only)
+#   - Default: 5.0
+
+---
+
+# ============================================================================
+# Quality Metrics
+# ============================================================================
+#
+# Regression stores quality metrics in data._regression_metrics:
+#
+# {
+#   'method': 'regression',
+#   'implementation': 'mne_eog_regression',
+#   'data_type': 'Epochs',  # or 'Raw'
+#   'eog_channels': ['HEOG', 'VEOG'],
+#   'subtract_evoked': True,
+#   'regression_coefficients': {
+#       'shape': (64, 2),  # n_eeg_channels × n_eog_channels
+#       'max_coeff': 0.23,
+#       'mean_coeff': 0.12
+#   },
+#   'artifact_reduction': {
+#       'mean_correlation_preserved': 0.95  # Higher is better
+#   },
+#   'quality_flags': {
+#       'low_correlation': False,        # < 0.85 (critical)
+#       'acceptable_correction': True,   # ≥ 0.85 (good)
+#       'high_correlation': True,        # ≥ 0.95 (excellent)
+#       'extreme_coefficients': False,   # > 0.5 (warning)
+#       'minimal_correction': False      # < 0.01 (info)
+#   }
+# }
+
+---
+
+# ============================================================================
+# References
+# ============================================================================
+#
+# Gratton, G., Coles, M. G., & Donchin, E. (1983). A new method for off-line
+# removal of ocular artifact. Electroencephalography and Clinical
+# Neurophysiology, 55(4), 468-484.
+#
+# MNE-Python EOGRegression:
+# https://mne.tools/stable/generated/mne.preprocessing.EOGRegression.html
+#
+# Tutorial:
+# https://mne.tools/stable/auto_tutorials/preprocessing/35_artifact_correction_regression.html

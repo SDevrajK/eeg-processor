@@ -1,6 +1,6 @@
 from typing import Optional
 from mne.io import BaseRaw
-from mne import Epochs
+from mne import BaseEpochs
 import matplotlib.pyplot as plt
 
 
@@ -10,7 +10,7 @@ def plot_stage(data, stage_name: str, **kwargs):
 
     if isinstance(data, BaseRaw):
         fig = _plot_raw(data, title=f"Raw: {stage_name}", **kwargs)
-    elif isinstance(data, Epochs):
+    elif isinstance(data, BaseEpochs):
         fig = _plot_epochs(data, title=f"Epochs: {stage_name}", **kwargs)
 
     if fig:

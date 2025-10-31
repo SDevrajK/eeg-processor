@@ -8,14 +8,14 @@ from pathlib import Path
 from typing import Optional, Union
 from loguru import logger
 from mne.io import BaseRaw
-from mne import Epochs
+from mne import BaseEpochs
 
 
-def save_raw(data: Union[BaseRaw, Epochs], 
-             suffix: str = "", 
+def save_raw(data: Union[BaseRaw, BaseEpochs],
+             suffix: str = "",
              format: str = "fif",
              output_dir: Optional[str] = None,
-             **kwargs) -> Union[BaseRaw, Epochs]:
+             **kwargs) -> Union[BaseRaw, BaseEpochs]:
     """
     Save raw or epochs data to disk with optional suffix.
     
@@ -74,7 +74,7 @@ def save_raw(data: Union[BaseRaw, Epochs],
             else:
                 raise ValueError(f"Unsupported format for Raw data: {format}")
                 
-        elif isinstance(data, Epochs):
+        elif isinstance(data, BaseEpochs):
             if format == "fif":
                 data.save(output_file, overwrite=True, **kwargs)
             else:

@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eeg-processor.org/schemas/stage_apply_baseline.json",
+  "title": "EEG Processor - apply_baseline Stage",
+  "description": "Apply baseline correction to existing Epochs. This stage re-applies baseline correction to Epochs that have already been created, which is particularly useful after artifact correction methods like EOG regression where MNE-Python recommends re-baselining.",
+  "type": "object",
+  "properties": {
+    "baseline": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "array",
+          "items": [
+            {"type": ["number", "null"]},
+            {"type": ["number", "null"]}
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      ],
+      "default": [null, 0],
+      "description": "Time interval for baseline correction. null: no baseline. [a, b]: interval from a to b seconds (inclusive). If a is null, uses beginning of epoch. If b is null, uses end of epoch. Default: [null, 0] (beginning to time 0)."
+    },
+    "verbose": {
+      "type": ["boolean", "string", "null"],
+      "default": null,
+      "description": "Verbosity level. true/false for enable/disable, or MNE verbosity string."
+    }
+  },
+  "examples": [
+    {
+      "description": "Default baseline (beginning to time 0)",
+      "baseline": [null, 0]
+    },
+    {
+      "description": "Custom baseline from -0.2 to 0 seconds",
+      "baseline": [-0.2, 0]
+    },
+    {
+      "description": "No baseline correction",
+      "baseline": null
+    },
+    {
+      "description": "Entire epoch as baseline",
+      "baseline": [null, null]
+    }
+  ],
+  "additionalProperties": false
+}

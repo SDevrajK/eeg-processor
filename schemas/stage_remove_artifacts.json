@@ -2,99 +2,171 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://eeg-processor.org/schemas/stage_remove_artifacts.json",
   "title": "EEG Processor - remove_artifacts Stage",
-  "description": "Remove artifacts using Independent Component Analysis (ICA). Combines automatic classification (ICALabel) with correlation-based detection to identify and remove eye blinks, muscle artifacts, cardiac artifacts, and line noise components.",
+  "description": "Remove artifacts using Independent Component Analysis (ICA) or EOG regression. Supports multiple methods: ICA with automatic classification (ICALabel), or regression-based blink correction following Gratton & Coles (1983).",
   "type": "object",
   "properties": {
-    "n_components": {
-      "type": [
-        "number",
-        "integer"
-      ],
-      "default": 15
-    },
     "method": {
       "type": "string",
+      "default": "ica",
+      "enum": ["ica", "regression"],
+      "description": "Artifact removal method. 'ica': Independent Component Analysis for multiple artifact types. 'regression': EOG regression for blink-focused correction (faster, deterministic)."
+    },
+    "n_components": {
+      "type": ["number", "integer", "null"],
+      "default": 15,
+      "description": "Number of ICA components to compute (ICA method only). Use 15-20 for typical datasets."
+    },
+    "ica_method": {
+      "type": "string",
       "default": "infomax",
-      "enum": [
-        "average",
-        "median",
-        "ica",
-        "euclid",
-        "riemann",
-        "eog_regression",
-        "gratton_coles"
-      ]
+      "enum": ["fastica", "infomax", "picard"],
+      "description": "ICA decomposition algorithm (ICA method only). 'infomax': Robust, widely used. 'picard': Faster convergence."
     },
     "eog_channels": {
-      "type": [
-        "array",
-        "null"
-      ],
-      "default": "['VEOG', 'HEOG']"
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "EOG channel names for artifact detection. Required for regression method. Auto-detected if null. Example: ['HEOG', 'VEOG']."
     },
     "ecg_channels": {
-      "type": [
-        "array",
-        "null"
-      ]
+      "type": ["array", "null"],
+      "items": {"type": "string"},
+      "default": null,
+      "description": "ECG channel names for cardiac artifact detection (ICA method only). Auto-detected if null."
+    },
+    "subtract_evoked": {
+      "type": "boolean",
+      "default": true,
+      "description": "For Epochs with regression method: subtract evoked response before fitting (Gratton & Coles 1983). Preserves ERPs while removing blinks. Ignored for Raw data."
+    },
+    "show_plot": {
+      "type": "boolean",
+      "default": false,
+      "description": "Display before/after comparison plots (regression method only)."
+    },
+    "plot_duration": {
+      "type": "number",
+      "default": 10.0,
+      "minimum": 1.0,
+      "description": "Duration of comparison plot in seconds (regression method, Raw data only)."
+    },
+    "plot_start": {
+      "type": "number",
+      "default": 5.0,
+      "minimum": 0.0,
+      "description": "Start time for comparison plot in seconds (regression method, Raw data only)."
     },
     "auto_classify": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Enable automatic ICA component classification using ICALabel (ICA method only)."
     },
     "use_arci": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Use ARCI (Automatic Removal of Cardiac Interference) for cardiac artifacts (ICA method only)."
     },
     "muscle_threshold": {
       "type": "number",
-      "default": 0.8
+      "default": 0.8,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "ICALabel threshold for muscle artifact components (ICA method only)."
     },
     "eye_threshold": {
       "type": "number",
-      "default": 0.8
+      "default": 0.8,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "ICALabel threshold for eye artifact components (ICA method only)."
     },
     "heart_threshold": {
       "type": "number",
-      "default": 0.8
+      "default": 0.8,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "ICALabel threshold for cardiac artifact components (ICA method only)."
     },
     "line_noise_threshold": {
       "type": "number",
-      "default": 0.8
+      "default": 0.8,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "ICALabel threshold for line noise components (ICA method only)."
     },
     "arci_cardiac_freq_range": {
-      "type": "number",
-      "default": "(0.6, 1.7)"
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 2,
+      "maxItems": 2,
+      "default": [0.6, 1.7],
+      "description": "Cardiac frequency range in Hz for ARCI detection (ICA method only)."
     },
     "arci_regularity_threshold": {
       "type": "number",
-      "default": 0.4
+      "default": 0.4,
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "ARCI regularity threshold for cardiac component detection (ICA method only)."
     },
     "plot_components": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Plot ICA component topographies and time courses (ICA method only)."
     },
     "enable_manual": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Enable manual component selection GUI (ICA method only)."
     },
     "decim": {
-      "type": [
-        "integer",
-        "null"
-      ]
+      "type": ["integer", "null"],
+      "default": null,
+      "minimum": 1,
+      "description": "Decimation factor for ICA fitting (ICA method only). Higher values = faster but less accurate."
     },
     "random_state": {
       "type": "integer",
-      "default": 42
+      "default": 42,
+      "description": "Random seed for reproducibility (ICA method only)."
     },
     "verbose": {
-      "type": [
-        "boolean",
-        "string",
-        "null"
-      ]
+      "type": ["boolean", "string", "null"],
+      "default": null,
+      "description": "Verbosity level. true/false for enable/disable, or MNE verbosity string."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"method": {"const": "regression"}}
+      },
+      "then": {
+        "required": ["eog_channels"],
+        "description": "EOG channels are required when using regression method."
+      }
+    }
+  ],
+  "examples": [
+    {
+      "description": "ICA with automatic classification",
+      "method": "ica",
+      "n_components": 15,
+      "auto_classify": true,
+      "eog_channels": ["HEOG", "VEOG"]
+    },
+    {
+      "description": "EOG regression for epoched ERP data (Gratton & Coles)",
+      "method": "regression",
+      "eog_channels": ["HEOG", "VEOG"],
+      "subtract_evoked": true
+    },
+    {
+      "description": "EOG regression for continuous data",
+      "method": "regression",
+      "eog_channels": ["HEOG", "VEOG"],
+      "show_plot": false
+    }
+  ],
   "additionalProperties": false
 }
