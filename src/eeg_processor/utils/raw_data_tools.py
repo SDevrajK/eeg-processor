@@ -6,7 +6,7 @@ import yaml
 
 import numpy as np
 from mne.io import BaseRaw
-from .event_parsers import find_matching_events
+from .event_parsers import find_matching_events, get_normalized_event_code
 
 
 def _replace_raw_content(original_raw: BaseRaw, new_raw: BaseRaw) -> BaseRaw:
@@ -115,8 +115,8 @@ def crop_data(
 
 def adjust_event_times(raw: BaseRaw,
                        shift_ms: float,
-                       target_events: Optional[List[str]] = None,
-                       protect_events: Optional[List[str]] = None,
+                       target_events: Optional[List[Union[str, int]]] = None,
+                       protect_events: Optional[List[Union[str, int]]] = None,
                        inplace: bool = False,
                        **kwargs) -> BaseRaw:
     """
@@ -126,7 +126,9 @@ def adjust_event_times(raw: BaseRaw,
         raw: Raw EEG data with annotations
         shift_ms: Time shift in milliseconds
         target_events: Specific events to shift (None = all events)
+                      Can be integers (1, 2, 10) or strings ("S1", "Stimulus/S 10")
         protect_events: Events to exclude from shifting
+                       Can be integers (1, 2, 10) or strings ("S1", "Stimulus/S 10")
         inplace: Whether to modify input object or create copy
         **kwargs: Additional parameters
 
@@ -145,13 +147,72 @@ def adjust_event_times(raw: BaseRaw,
     shift_sec = shift_ms / 1000
     annotations = result.annotations
 
-    # Create modification mask
+    # Normalize target and protect events for proper matching across formats
+    # Detect format by inspecting actual annotations rather than relying on type
+    def _normalize_event_for_matching(event_input: Union[str, int]) -> str:
+        """
+        Normalize event code to match the format used in annotations.
+        Inspects the actual annotation format rather than relying on Raw object type.
+        """
+        if len(annotations.description) == 0:
+            return str(event_input)
+
+        # Extract numeric part from input
+        if isinstance(event_input, (int, float)):
+            digits = str(int(event_input))
+        else:
+            digits = ''.join(filter(str.isdigit, str(event_input))) or '0'
+        num = int(digits)
+
+        # Check first annotation to determine format
+        sample = annotations.description[0]
+
+        # BrainVision format: "Stimulus/S  1", "Stimulus/S 10", "Stimulus/S100"
+        if sample.startswith("Stimulus/S"):
+            if num < 10:
+                return f"Stimulus/S  {num}"
+            elif num <= 99:
+                return f"Stimulus/S {num}"
+            else:
+                return f"Stimulus/S{num}"
+        # Response format: similar pattern
+        elif sample.startswith("Response/R"):
+            if num < 10:
+                return f"Response/R  {num}"
+            elif num <= 99:
+                return f"Response/R {num}"
+            else:
+                return f"Response/R{num}"
+        # Plain numeric format (Curry, Neuroscan, etc.)
+        else:
+            return digits
+
+    target_normalized = None
+    protect_normalized = None
+    if target_events is not None:
+        target_normalized = [_normalize_event_for_matching(evt) for evt in target_events]
+        logger.debug(f"Target events normalized: {target_events} -> {target_normalized}")
+
+    if protect_events is not None:
+        protect_normalized = [_normalize_event_for_matching(evt) for evt in protect_events]
+        logger.debug(f"Protected events normalized: {protect_events} -> {protect_normalized}")
+
+    # Create modification mask using normalized matching
     modify_mask = np.ones(len(annotations), dtype=bool)
+    shifted_count = 0
     for i, desc in enumerate(annotations.description):
-        if protect_events and desc in protect_events:
+        if protect_normalized and desc in protect_normalized:
             modify_mask[i] = False
-        elif target_events and desc not in target_events:
-            modify_mask[i] = False
+        elif target_normalized is not None:
+            # If target_events is explicitly specified (even if empty), only shift those
+            if len(target_normalized) == 0 or desc not in target_normalized:
+                modify_mask[i] = False
+
+        if modify_mask[i]:
+            shifted_count += 1
+
+    # Log summary
+    logger.info(f"Shifting {shifted_count} of {len(annotations)} events by {shift_ms} ms")
 
     # Apply changes
     new_onset = annotations.onset.copy()

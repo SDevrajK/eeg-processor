@@ -127,9 +127,11 @@ processing:
   
   # Event time adjustment (if needed)
   # - adjust_events:
-  #     shift_ms: 0                       # Time shift in milliseconds
-  #     target_events: []                 # Events to adjust (empty = all)
-  #     protect_events: []                # Events to leave unchanged
+  #     shift_ms: 50                      # Time shift in milliseconds (positive=forward, negative=backward)
+  #     target_events: [1, 2, 10]         # Events to adjust (integers or strings like "S1")
+  #                                        # Automatically normalized to match file format
+  #                                        # Omit to shift all events
+  #     protect_events: [99]              # Events to exclude from shifting (takes precedence)
 
   # -------------------------------------------------------------------------
   # FILTERING - Apply early in pipeline
