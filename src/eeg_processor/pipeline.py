@@ -341,9 +341,18 @@ class EEGPipeline:
         """Handle data type transitions and cleanup."""
         should_save = stage_params.get('save', True)
 
+        # Helper to safely check if type is subclass (handles dict and other non-class types)
+        def is_subclass_safe(type_obj, parent_class):
+            try:
+                return isinstance(type_obj, type) and issubclass(type_obj, parent_class)
+            except TypeError:
+                return False
+
         # Special case: Don't save epochs at type transition if followed by baseline/rejection
         # Epochs will be saved at finalization after all processing is complete
-        if previous_type == BaseRaw and current_type in [BaseEpochs, dict]:
+        is_raw_to_epochs = (is_subclass_safe(previous_type, BaseRaw) and
+                           (current_type is dict or is_subclass_safe(current_type, BaseEpochs)))
+        if is_raw_to_epochs:
             logger.debug("Skipping epoch save at type transition - will save after all post-epoch stages complete")
             should_save = False
 
@@ -353,12 +362,15 @@ class EEGPipeline:
         # Early return if no cleanup needed
         if current_data is None:
             return
-            
+
         # Special handling for Raw -> Epochs transition
-        if clear_raw_after_epoching and previous_type == BaseRaw and current_type == BaseEpochs:
+        is_raw_to_epochs_cleanup = (clear_raw_after_epoching and
+                                    is_subclass_safe(previous_type, BaseRaw) and
+                                    is_subclass_safe(current_type, BaseEpochs))
+        if is_raw_to_epochs_cleanup:
             self._cleanup_raw_after_epoching(current_data)
             return
-            
+
         # Standard cleanup
         cleanup_and_monitor_gc(current_data, f"{type(current_data).__name__} cleanup")
 
@@ -470,7 +482,7 @@ class EEGPipeline:
                         condition_name=condition['name'],
                         event_type=trigger_name
                     )
-        elif data_type in [BaseEpochs, Evoked, AverageTFR, Spectrum, RawTFR]:
+        elif isinstance(data, (BaseEpochs, Evoked, AverageTFR, Spectrum, RawTFR)):
             self.result_saver.save_data_object(
                 data_object=data,
                 participant_id=participant_id,

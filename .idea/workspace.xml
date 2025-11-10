@@ -5,35 +5,43 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7d4fae13-bf32-4a7e-a972-46a8b083c287" name="Changes" comment="Fixed data quality tracking and reporting so it works but is still ugly">
-      <change afterPath="$PROJECT_DIR$/.claude/commands/audit-code.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/commands/scaffold-project.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.claude/commands/create-prd.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/create-prd.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.claude/commands/generate-tasks.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/generate-tasks.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.claude/commands/process-task-list.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/process-task-list.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/commands/create-prd.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/commands/generate-tasks.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/commands/process-task-list.xml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CONTRIBUTING.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/TEST_SETUP.md" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/config/processing_params.yml" beforeDir="false" afterPath="$PROJECT_DIR$/config/processing_params.yml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/setup.py" beforeDir="false" afterPath="$PROJECT_DIR$/setup.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/cli.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/cli.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/file_io/brainvision.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/file_io/brainvision.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/file_io/fif.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/file_io/fif.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/pipeline.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/artifact.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/artifact.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/bad_channels.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/bad_channels.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/epoching.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/epoching.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/ica.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/ica.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/time_frequency.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/time_frequency.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/processing/visualization.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/processing/visualization.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/pipeline_detector.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/pipeline_detector.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_flagging.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_flagging.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_html_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_html_generator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_plot_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_plot_generator.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_reporter.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_reporter.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_tracker.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/quality_control/quality_tracker.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/state_management/data_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/state_management/data_processor.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/state_management/participant_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/state_management/participant_handler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/state_management/result_saver.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/state_management/result_saver.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/analysis_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/analysis_interface.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/config_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/config_loader.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/config_loader_new.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/correct_triggers.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/correct_triggers.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/memory_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/memory_tools.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/performance.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/performance.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/eeg_processor/utils/raw_data_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/eeg_processor/utils/raw_data_tools.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_asr_integration.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_asr_integration.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_config_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_config_loader.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_new_config.py" beforeDir="false" />
     </list>
@@ -76,35 +84,35 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python tests.Python tests in test_config_loader_fixed.py.executor": "Run",
-    "Python tests.Python tests in test_emcp_validation.py.executor": "Run",
-    "Python.core.executor": "Run",
-    "Python.generate_mock_report.executor": "Run",
-    "Python.mne_testspace.executor": "Run",
-    "Python.run_baseline_analysis.executor": "Run",
-    "Python.run_continuous_tfr_analysis.executor": "Debug",
-    "Python.run_pipeline.executor": "Run",
-    "Python.run_test_pipeline (1).executor": "Run",
-    "Python.run_test_pipeline.executor": "Run",
-    "Python.test_grand_average.executor": "Run",
-    "Python.test_one_subject.executor": "Run",
-    "Python.test_script.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "C:/Users/sayee/Documents/Research/PythonCode/EEG_Processor/schemas/eeg_processor_config.json",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "settings.json.schema",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python tests.Python tests in test_config_loader_fixed.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.Python tests in test_emcp_validation.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python.core.executor&quot;: &quot;Run&quot;,
+    &quot;Python.generate_mock_report.executor&quot;: &quot;Run&quot;,
+    &quot;Python.mne_testspace.executor&quot;: &quot;Run&quot;,
+    &quot;Python.run_baseline_analysis.executor&quot;: &quot;Run&quot;,
+    &quot;Python.run_continuous_tfr_analysis.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.run_pipeline.executor&quot;: &quot;Run&quot;,
+    &quot;Python.run_test_pipeline (1).executor&quot;: &quot;Run&quot;,
+    &quot;Python.run_test_pipeline.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_grand_average.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_one_subject.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_script.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/sayee/Documents/Research/PythonCode/EEG_Processor/schemas/eeg_processor_config.json&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;settings.json.schema&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\sayee\Documents\Research\PythonCode\EEG_Processor\tests\test_config" />
@@ -226,8 +234,8 @@
       <item itemvalue="Python.generate_mock_report" />
       <item itemvalue="Python.run_test_pipeline (1)" />
       <item itemvalue="Python.run_test_pipeline" />
-      <item itemvalue="Python tests.Python tests in test_emcp_validation.py" />
       <item itemvalue="Python tests.Python tests in C:/Users/sayee/Documents/Research/PythonCode/EEG_Processor/tests/test_config_loader_fixed.py" />
+      <item itemvalue="Python tests.Python tests in test_emcp_validation.py" />
     </list>
     <recent_temporary>
       <list>
@@ -284,6 +292,7 @@
       <workItem from="1750020874711" duration="56323000" />
       <workItem from="1750263217599" duration="12200000" />
       <workItem from="1750295461094" duration="27939000" />
+      <workItem from="1762445273394" duration="137000" />
     </task>
     <task id="LOCAL-00001" summary="Large Push, added time-frequency, many other things.">
       <option name="closed" value="true" />
