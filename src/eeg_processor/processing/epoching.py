@@ -55,7 +55,7 @@ def create_epochs(raw: BaseRaw,
     for ch_type_code, ch_type_name in ch_type_mapping.items():
         if ch_type_code in channel_types_in_data:
             if ch_type_name == 'eeg':
-                default_reject[ch_type_name] = 100e-6  # 100 µV
+                default_reject[ch_type_name] = 250e-6  # 250 µV (changed from 100µV to match BVA/script)
                 default_flat[ch_type_name] = 1e-6      # 1 µV
             elif ch_type_name == 'eog':
                 default_reject[ch_type_name] = 150e-6  # 150 µV
@@ -63,6 +63,11 @@ def create_epochs(raw: BaseRaw,
 
     reject_params = reject if reject is not None else (default_reject if reject_bad else None)
     flat_params = flat if flat is not None else (default_flat if reject_bad else None)
+
+    # Convert baseline list to tuple if needed (YAML loads as list, MNE needs tuple)
+    if isinstance(baseline, list):
+        baseline = tuple(baseline)
+        logger.debug(f"Converted baseline from list to tuple: {baseline}")
 
     # Convert to proper data types
     if reject_params:
@@ -116,6 +121,8 @@ def create_epochs(raw: BaseRaw,
 
     # Create epochs using MNE constructor
     try:
+        logger.debug(f"Creating epochs with: tmin={tmin}, tmax={tmax}, baseline={baseline}, reject={reject_params}")
+
         epochs = Epochs(
             raw,
             events=events,
@@ -130,9 +137,10 @@ def create_epochs(raw: BaseRaw,
             verbose=False,  # Control verbosity
             **kwargs
         )
-        
+
         logger.info(f"Created {len(epochs)} epochs from {len(event_id)} event types")
         logger.info(f"Event types: {list(event_id.keys())}")
+        logger.info(f"Baseline applied: {epochs.baseline}, Rejection: {reject_params}")
         
         # Add participant metadata to epochs if available in raw data
         _add_participant_metadata_to_epochs(epochs, raw)

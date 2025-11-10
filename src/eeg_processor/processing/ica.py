@@ -184,7 +184,7 @@ def _fit_ica(
         method=method,
         fit_params=dict(extended=True) if method == 'infomax' else dict(),
         random_state=random_state,
-        max_iter=500,
+        max_iter='auto',  # Changed from 500 to match BVA/script - allows algorithm to converge properly
         verbose=verbose
     )
 
@@ -424,10 +424,26 @@ def _detect_eog_components(raw: BaseRaw, ica: ICA, eog_channels: List[str]) -> L
 
     logger.info("Detecting EOG-correlated components...")
 
-    for eog_ch in eog_channels:
-        if eog_ch in raw.ch_names:
+    # Filter to only channels that exist in the data
+    available_eog_channels = [ch for ch in eog_channels if ch in raw.ch_names]
+
+    if not available_eog_channels:
+        logger.warning("No EOG channels found in data")
+        return []
+
+    # Call find_bads_eog ONCE with all EOG channels (matches BVA/script approach)
+    # This is more robust than calling separately for each channel
+    try:
+        components, scores = ica.find_bads_eog(raw, ch_name=available_eog_channels,
+                                                threshold=3.0, verbose=False)
+        eog_components = list(components)
+        logger.info(f"EOG detection ({available_eog_channels}): components {components}")
+    except Exception as e:
+        logger.warning(f"EOG detection failed for {available_eog_channels}: {e}")
+        # Fallback to per-channel detection if joint detection fails
+        for eog_ch in available_eog_channels:
             try:
-                components, scores = ica.find_bads_eog(raw, eog_ch, verbose=False)
+                components, scores = ica.find_bads_eog(raw, eog_ch, threshold=3.0, verbose=False)
                 eog_components.extend(components)
                 logger.info(f"EOG detection ({eog_ch}): components {components}")
             except Exception as e:
