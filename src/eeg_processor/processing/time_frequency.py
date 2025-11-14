@@ -178,158 +178,215 @@ def compute_epochs_tfr_average(epochs: Epochs,
     # Determine if we should use single-trial baseline correction
     use_single_trial = single_trial_baseline and baseline is not None
     
-    # Compute time-frequency decomposition
-    if method == "morlet":
-        logger.info(f"Computing Morlet TFR ({freq_range[0]}-{freq_range[1]} Hz)...")
+    # Compute time-frequency decomposition with detailed error handling
+    try:
+        if method == "morlet":
+            logger.info(f"Computing Morlet TFR ({freq_range[0]}-{freq_range[1]} Hz)...")
+            logger.debug(f"TFR parameters: n_cycles={n_cycles}, use_fft=True, n_jobs=4")
 
-        if use_single_trial:
-            # Get EpochsTFR with complex output for single-trial correction
-            epochs_tfr = epochs.compute_tfr(
-                method=method,
-                freqs=freqs,
-                n_cycles=n_cycles,
-                use_fft=True,
-                return_itc=False,  # We'll compute ITC manually
-                average=False,  # Get EpochsTFR, not AverageTFR
-                output='complex',  # Get complex values
-                n_jobs=4,
-                picks='eeg',
-                verbose='INFO',
-                **kwargs
-            )
+            if use_single_trial:
+                # Get EpochsTFR with complex output for single-trial correction
+                logger.debug(f"Computing complex TFR for single-trial baseline correction...")
+                epochs_tfr = epochs.compute_tfr(
+                    method=method,
+                    freqs=freqs,
+                    n_cycles=n_cycles,
+                    use_fft=True,
+                    return_itc=False,  # We'll compute ITC manually
+                    average=False,  # Get EpochsTFR, not AverageTFR
+                    output='complex',  # Get complex values
+                    n_jobs=4,
+                    picks='eeg',
+                    verbose='INFO',
+                    **kwargs
+                )
+                logger.debug(f"TFR computation complete. Shape: {epochs_tfr.data.shape}")
+            else:
+                # Original implementation for backward compatibility
+                logger.debug(f"Computing averaged TFR (traditional pipeline)...")
+                power, itc = epochs.compute_tfr(
+                    method=method,
+                    freqs=freqs,
+                    n_cycles=n_cycles,
+                    use_fft=True,
+                    return_itc=compute_itc,
+                    average=True,  # Return AverageTFR, not EpochsTFR
+                    n_jobs=4,
+                    picks='eeg',
+                    verbose='INFO',
+                    **kwargs
+                )
+                logger.debug(f"TFR computation complete. Power shape: {power.data.shape}")
+
+        elif method == "multitaper":
+            logger.info(f"Computing Multitaper TFR ({freq_range[0]}-{freq_range[1]} Hz)...")
+            logger.debug(f"TFR parameters: n_cycles={n_cycles}, use_fft=True, n_jobs=4")
+
+            if use_single_trial:
+                # Get EpochsTFR with complex output for single-trial correction
+                logger.debug(f"Computing complex TFR for single-trial baseline correction...")
+                epochs_tfr = epochs.compute_tfr(
+                    method=method,
+                    freqs=freqs,
+                    n_cycles=n_cycles,
+                    use_fft=True,
+                    return_itc=False,  # We'll compute ITC manually
+                    average=False,  # Get EpochsTFR, not EpochsTFR
+                    output='complex',  # Get complex values
+                    n_jobs=4,
+                    verbose='INFO',
+                    picks='eeg',
+                    **kwargs
+                )
+                logger.debug(f"TFR computation complete. Shape: {epochs_tfr.data.shape}")
+            else:
+                # Original implementation for backward compatibility
+                logger.debug(f"Computing averaged TFR (traditional pipeline)...")
+                power, itc = epochs.compute_tfr(
+                    method=method,
+                    freqs=freqs,
+                    n_cycles=n_cycles,
+                    use_fft=True,
+                    return_itc=compute_itc,
+                    average=True,  # Return AverageTFR, not EpochsTFR
+                    n_jobs=4,
+                    verbose='INFO',
+                    picks='eeg',
+                    **kwargs
+                )
+                logger.debug(f"TFR computation complete. Power shape: {power.data.shape}")
         else:
-            # Original implementation for backward compatibility
-            power, itc = epochs.compute_tfr(
-                method=method,
-                freqs=freqs,
-                n_cycles=n_cycles,
-                use_fft=True,
-                return_itc=compute_itc,
-                average=True,  # Return AverageTFR, not EpochsTFR
-                n_jobs=4,
-                picks='eeg',
-                verbose='INFO',
-                **kwargs
-            )
+            raise ValueError(f"Unknown TFR method: {method}")
 
-    elif method == "multitaper":
-        logger.info(f"Computing Multitaper TFR ({freq_range[0]}-{freq_range[1]} Hz)...")
-
-        if use_single_trial:
-            # Get EpochsTFR with complex output for single-trial correction
-            epochs_tfr = epochs.compute_tfr(
-                method=method,
-                freqs=freqs,
-                n_cycles=n_cycles,
-                use_fft=True,
-                return_itc=False,  # We'll compute ITC manually
-                average=False,  # Get EpochsTFR, not EpochsTFR
-                output='complex',  # Get complex values
-                n_jobs=4,
-                verbose='INFO',
-                picks='eeg',
-                **kwargs
-            )
-        else:
-            # Original implementation for backward compatibility
-            power, itc = epochs.compute_tfr(
-                method=method,
-                freqs=freqs,
-                n_cycles=n_cycles,
-                use_fft=True,
-                return_itc=compute_itc,
-                average=True,  # Return AverageTFR, not EpochsTFR
-                n_jobs=4,
-                verbose='INFO',
-                picks='eeg',
-                **kwargs
-            )
-    else:
-        raise ValueError(f"Unknown TFR method: {method}")
+    except Exception as e:
+        logger.error(f"TFR computation failed: {type(e).__name__}: {e}")
+        logger.error(f"Error occurred during {method} TFR computation")
+        logger.error(f"Epochs info: {len(epochs)} epochs, {len(epochs.ch_names)} channels, {len(epochs.times)} time points")
+        logger.error(f"Frequency info: {len(freqs)} frequencies from {freqs[0]:.2f} to {freqs[-1]:.2f} Hz")
+        import traceback
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        raise
     
     # Handle single-trial baseline correction with memory-efficient chunked processing
     if use_single_trial:
-        logger.info(f"Applying single-trial baseline correction: {baseline}, mode: {baseline_mode}")
-    
-        # Get full complex data shape for initialization
-        complex_data = epochs_tfr.data  # (n_epochs, n_channels, n_freqs, n_times)
-        n_epochs, n_channels, n_freqs, n_times = complex_data.shape
-    
-        # Initialize accumulators for chunked processing
-        averaged_power = np.zeros((n_channels, n_freqs, n_times), dtype=np.float64)
-        complex_average = np.zeros((n_channels, n_freqs, n_times), dtype=np.complex128) if compute_complex_average else None
-        itc_accumulator = np.zeros((n_channels, n_freqs, n_times), dtype=np.complex128) if compute_itc else None
-    
-        # Process in chunks to manage memory usage
-        n_processed = 0
-        chunk_size_int = optimal_chunk_size if optimal_chunk_size is not None else n_epochs
-        for start_idx in range(0, n_epochs, chunk_size_int):
-            end_idx = min(start_idx + chunk_size_int, n_epochs)
-            chunk_size = end_idx - start_idx
-    
-            logger.info(f"Processing chunk {start_idx//chunk_size_int + 1}/{int(np.ceil(n_epochs / chunk_size_int))}: epochs {start_idx}-{end_idx-1}")
-    
-            # Extract chunk of complex data
-            chunk_complex = complex_data[start_idx:end_idx]  # (chunk_size, n_channels, n_freqs, n_times)
-    
-            # Accumulate complex average if requested
+        try:
+            logger.info(f"Applying single-trial baseline correction: {baseline}, mode: {baseline_mode}")
+
+            # Get full complex data shape for initialization
+            logger.debug("Extracting complex TFR data...")
+            complex_data = epochs_tfr.data  # (n_epochs, n_channels, n_freqs, n_times)
+            n_epochs, n_channels, n_freqs, n_times = complex_data.shape
+            logger.debug(f"Complex data extracted. Shape: {complex_data.shape}, dtype: {complex_data.dtype}")
+
+            # Initialize accumulators for chunked processing
+            logger.debug("Initializing accumulators for chunked processing...")
+            averaged_power = np.zeros((n_channels, n_freqs, n_times), dtype=np.float64)
+            complex_average = np.zeros((n_channels, n_freqs, n_times), dtype=np.complex128) if compute_complex_average else None
+            itc_accumulator = np.zeros((n_channels, n_freqs, n_times), dtype=np.complex128) if compute_itc else None
+            logger.debug(f"Accumulators initialized (power: {averaged_power.shape}, complex_avg: {complex_average is not None}, itc: {itc_accumulator is not None})")
+
+            # Process in chunks to manage memory usage
+            n_processed = 0
+            chunk_size_int = optimal_chunk_size if optimal_chunk_size is not None else n_epochs
+            n_chunks = int(np.ceil(n_epochs / chunk_size_int))
+            logger.info(f"Starting chunked processing: {n_chunks} chunks of size {chunk_size_int}")
+
+            for start_idx in range(0, n_epochs, chunk_size_int):
+                end_idx = min(start_idx + chunk_size_int, n_epochs)
+                chunk_size = end_idx - start_idx
+                chunk_num = start_idx // chunk_size_int + 1
+
+                logger.info(f"Processing chunk {chunk_num}/{n_chunks}: epochs {start_idx}-{end_idx-1}")
+
+                try:
+                    # Extract chunk of complex data
+                    logger.debug(f"  Extracting chunk data from indices {start_idx}:{end_idx}")
+                    chunk_complex = complex_data[start_idx:end_idx]  # (chunk_size, n_channels, n_freqs, n_times)
+                    logger.debug(f"  Chunk extracted: shape={chunk_complex.shape}, dtype={chunk_complex.dtype}")
+
+                    # Accumulate complex average if requested
+                    if compute_complex_average:
+                        logger.debug(f"  Accumulating complex average...")
+                        complex_average += np.sum(chunk_complex, axis=0)  # Sum across trials in chunk
+
+                    # Accumulate ITC if requested
+                    if compute_itc:
+                        logger.debug(f"  Computing ITC for chunk...")
+                        epsilon = np.finfo(float).eps
+                        # Normalize complex values and accumulate
+                        chunk_abs = np.abs(chunk_complex)
+                        normalized_chunk = chunk_complex / (chunk_abs + epsilon)
+                        itc_accumulator += np.sum(normalized_chunk, axis=0)  # Sum normalized complex values
+
+                    # Convert to power for baseline correction
+                    logger.debug(f"  Converting to power...")
+                    chunk_power = np.abs(chunk_complex) ** 2
+                    logger.debug(f"  Power computed: shape={chunk_power.shape}, min={chunk_power.min():.2e}, max={chunk_power.max():.2e}")
+
+                    # Apply baseline correction to chunk
+                    logger.debug(f"  Applying baseline correction (mode={baseline_mode}, baseline={baseline})...")
+                    corrected_chunk_power = apply_single_trial_baseline(
+                        chunk_power, epochs_tfr.times, baseline, baseline_mode  # type: ignore
+                    )
+                    logger.debug(f"  Baseline correction complete: min={corrected_chunk_power.min():.2e}, max={corrected_chunk_power.max():.2e}")
+
+                    # Accumulate corrected power (sum across trials in chunk)
+                    logger.debug(f"  Accumulating corrected power...")
+                    averaged_power += np.sum(corrected_chunk_power, axis=0)
+                    n_processed += chunk_size
+                    logger.debug(f"  Chunk {chunk_num} complete. Total epochs processed: {n_processed}/{n_epochs}")
+
+                    # Free memory immediately for this chunk
+                    del chunk_complex, chunk_power, corrected_chunk_power
+                    if compute_itc and 'chunk_abs' in locals():
+                        del chunk_abs, normalized_chunk
+                    gc.collect()  # Force garbage collection
+
+                except Exception as chunk_error:
+                    logger.error(f"Error processing chunk {chunk_num}: {type(chunk_error).__name__}: {chunk_error}")
+                    logger.error(f"Chunk indices: {start_idx}:{end_idx}, size: {chunk_size}")
+                    import traceback
+                    logger.error(f"Chunk error traceback:\n{traceback.format_exc()}")
+                    raise
+
+            # Finalize averages
+            logger.debug(f"Finalizing averages from {n_processed} epochs...")
+            averaged_power /= n_epochs  # Convert sum to average
+
             if compute_complex_average:
-                complex_average += np.sum(chunk_complex, axis=0)  # Sum across trials in chunk
-    
-            # Accumulate ITC if requested
+                complex_average /= n_epochs  # Convert sum to average
+                logger.info("Complex average computed using chunked processing")
+
             if compute_itc:
-                epsilon = np.finfo(float).eps
-                # Normalize complex values and accumulate
-                chunk_abs = np.abs(chunk_complex)
-                normalized_chunk = chunk_complex / (chunk_abs + epsilon)
-                itc_accumulator += np.sum(normalized_chunk, axis=0)  # Sum normalized complex values
-    
-            # Convert to power for baseline correction
-            chunk_power = np.abs(chunk_complex) ** 2
-    
-            # Apply baseline correction to chunk
-            corrected_chunk_power = apply_single_trial_baseline(
-                chunk_power, epochs_tfr.times, baseline, baseline_mode  # type: ignore
-            )
-    
-            # Accumulate corrected power (sum across trials in chunk)
-            averaged_power += np.sum(corrected_chunk_power, axis=0)
-            n_processed += chunk_size
-    
-            # Free memory immediately and force garbage collection
-            del chunk_complex, chunk_power, corrected_chunk_power
-            if compute_itc and 'chunk_abs' in locals():
-                del chunk_abs, normalized_chunk
-            gc.collect()  # Force garbage collection to free memory immediately
-    
-        # Finalize averages
-        averaged_power /= n_epochs  # Convert sum to average
-    
-        if compute_complex_average:
-            complex_average /= n_epochs  # Convert sum to average
-            logger.info("Complex average computed using chunked processing")
-    
-        if compute_itc:
-            # Finalize ITC computation
-            itc_data = np.abs(itc_accumulator / n_epochs)  # Convert sum to average, then magnitude
-    
-            # Create ITC AverageTFR object
-            itc = epochs_tfr.copy()
-            itc = itc.average()  # Convert EpochsTFR to AverageTFR
-            itc.data = itc_data
-            itc.comment = "Inter-trial coherence (chunked)"
-            logger.info("ITC computed using chunked processing")
-            del itc_accumulator
-    
-        # Create AverageTFR object from epochs_tfr
-        power = epochs_tfr.copy()
-        power = power.average()  # Convert EpochsTFR to AverageTFR
-        power.data = averaged_power  # Replace with baseline-corrected averaged data
-        power.comment = f"Single-trial baseline: {baseline_mode} (chunked: {chunk_size_int} epochs)"
-    
-        # Free the large complex_data array
-        del complex_data
-        logger.success(f"Chunked single-trial baseline correction complete: {n_processed} epochs processed")
+                # Finalize ITC computation
+                logger.debug("Finalizing ITC computation...")
+                itc_data = np.abs(itc_accumulator / n_epochs)  # Convert sum to average, then magnitude
+
+                # Create ITC AverageTFR object
+                itc = epochs_tfr.copy()
+                itc = itc.average()  # Convert EpochsTFR to AverageTFR
+                itc.data = itc_data
+                itc.comment = "Inter-trial coherence (chunked)"
+                logger.info("ITC computed using chunked processing")
+                del itc_accumulator
+
+            # Create AverageTFR object from epochs_tfr
+            logger.debug("Creating final AverageTFR object...")
+            power = epochs_tfr.copy()
+            power = power.average()  # Convert EpochsTFR to AverageTFR
+            power.data = averaged_power  # Replace with baseline-corrected averaged data
+            power.comment = f"Single-trial baseline: {baseline_mode} (chunked: {chunk_size_int} epochs)"
+
+            # Free the large complex_data array
+            del complex_data
+            logger.success(f"Chunked single-trial baseline correction complete: {n_processed} epochs processed")
+
+        except Exception as baseline_error:
+            logger.error(f"Single-trial baseline correction failed: {type(baseline_error).__name__}: {baseline_error}")
+            logger.error(f"Failed during initialization or chunked processing")
+            import traceback
+            logger.error(f"Full baseline correction traceback:\n{traceback.format_exc()}")
+            raise
     
     else:
         # Traditional post-averaging baseline correction
