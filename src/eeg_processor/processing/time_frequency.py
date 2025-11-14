@@ -170,12 +170,26 @@ def compute_epochs_tfr_average(epochs: Epochs,
         # Determine optimal chunk size based on memory limit
         if total_estimated_gb > memory_limit_gb:
             # Calculate chunk size to stay within memory limit
-            memory_per_epoch = total_estimated_gb / n_epochs
-            optimal_chunk_size = max(1, int(memory_limit_gb / memory_per_epoch))
+            # Note: The estimation is conservative and includes both complex + power data
+            # In practice, we process in chunks so we never hold all data at once
+            # Use 80% of memory limit for actual data, leaving 20% headroom
+            usable_memory_gb = memory_limit_gb * 0.8
+
+            # Memory per epoch for complex data (primary memory user during TFR computation)
+            memory_per_epoch_gb = complex_data_gb / n_epochs
+
+            # Calculate chunk size based on complex data memory (actual bottleneck)
+            optimal_chunk_size = max(1, int(usable_memory_gb / memory_per_epoch_gb))
+
+            # Safety check: don't exceed total epochs
+            optimal_chunk_size = min(optimal_chunk_size, n_epochs)
+
             logger.warning(f"Large dataset detected! Using chunked processing:")
-            logger.warning(f"  Memory limit: {memory_limit_gb:.1f} GB")
+            logger.warning(f"  Memory limit: {memory_limit_gb:.1f} GB (using {usable_memory_gb:.1f} GB for data)")
+            logger.warning(f"  Memory per epoch: {memory_per_epoch_gb:.3f} GB")
             logger.warning(f"  Chunk size: {optimal_chunk_size} epochs")
             logger.warning(f"  Number of chunks: {int(np.ceil(n_epochs / optimal_chunk_size))}")
+            logger.warning(f"  Estimated memory per chunk: {optimal_chunk_size * memory_per_epoch_gb:.1f} GB")
         else:
             optimal_chunk_size = n_epochs  # Process all at once
             logger.info(f"Memory usage within limits - processing all {n_epochs} epochs at once")
