@@ -6,7 +6,6 @@ from mne.time_frequency import tfr_morlet, tfr_multitaper, AverageTFR, Spectrum
 from typing import List, Union, Optional, Tuple
 from loguru import logger
 from ..utils.memory_tools import memory_profile, get_mne_object_memory
-from ..utils.performance import with_heartbeat
 
 
 def apply_single_trial_baseline(power_data: np.ndarray,
@@ -181,15 +180,11 @@ def compute_epochs_tfr_average(epochs: Epochs,
     
     # Compute time-frequency decomposition
     if method == "morlet":
-        # Wrap compute_tfr with heartbeat decorator for progress monitoring
-        wrapped_compute_tfr = with_heartbeat(
-            interval=5,
-            message=f"Computing Morlet TFR ({freq_range[0]}-{freq_range[1]} Hz)"
-        )(epochs.compute_tfr)
-    
+        logger.info(f"Computing Morlet TFR ({freq_range[0]}-{freq_range[1]} Hz)...")
+
         if use_single_trial:
             # Get EpochsTFR with complex output for single-trial correction
-            epochs_tfr = wrapped_compute_tfr(
+            epochs_tfr = epochs.compute_tfr(
                 method=method,
                 freqs=freqs,
                 n_cycles=n_cycles,
@@ -204,7 +199,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
             )
         else:
             # Original implementation for backward compatibility
-            power, itc = wrapped_compute_tfr(
+            power, itc = epochs.compute_tfr(
                 method=method,
                 freqs=freqs,
                 n_cycles=n_cycles,
@@ -216,17 +211,13 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 verbose='INFO',
                 **kwargs
             )
-    
+
     elif method == "multitaper":
-        # Wrap compute_tfr with heartbeat decorator for progress monitoring
-        wrapped_compute_tfr = with_heartbeat(
-            interval=5,
-            message=f"Computing Multitaper TFR ({freq_range[0]}-{freq_range[1]} Hz)"
-        )(epochs.compute_tfr)
-    
+        logger.info(f"Computing Multitaper TFR ({freq_range[0]}-{freq_range[1]} Hz)...")
+
         if use_single_trial:
             # Get EpochsTFR with complex output for single-trial correction
-            epochs_tfr = wrapped_compute_tfr(
+            epochs_tfr = epochs.compute_tfr(
                 method=method,
                 freqs=freqs,
                 n_cycles=n_cycles,
@@ -241,7 +232,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
             )
         else:
             # Original implementation for backward compatibility
-            power, itc = wrapped_compute_tfr(
+            power, itc = epochs.compute_tfr(
                 method=method,
                 freqs=freqs,
                 n_cycles=n_cycles,
@@ -347,11 +338,9 @@ def compute_epochs_tfr_average(epochs: Epochs,
         if compute_complex_average:
             # We need to get complex data even for traditional pipeline
             # This requires a separate computation without single-trial processing
+            logger.info("Computing complex data for complex average...")
             if method == "morlet":
-                epochs_tfr_for_complex = with_heartbeat(
-                    interval=5,
-                    message=f"Computing complex data for complex average"
-                )(epochs.compute_tfr)(
+                epochs_tfr_for_complex = epochs.compute_tfr(
                     method=method,
                     freqs=freqs,
                     n_cycles=n_cycles,
@@ -365,10 +354,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                     **kwargs
                 )
             elif method == "multitaper":
-                epochs_tfr_for_complex = with_heartbeat(
-                    interval=5,
-                    message=f"Computing complex data for complex average"
-                )(epochs.compute_tfr)(
+                epochs_tfr_for_complex = epochs.compute_tfr(
                     method=method,
                     freqs=freqs,
                     n_cycles=n_cycles,
@@ -381,7 +367,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                     verbose='INFO',
                     **kwargs
                 )
-    
+
             complex_average = np.mean(epochs_tfr_for_complex.data, axis=0)
             logger.info("Complex average computed for traditional pipeline")
     
