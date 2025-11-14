@@ -288,19 +288,14 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 # Chunked TFR computation path - compute and process chunk-by-chunk
                 logger.info("Using fully chunked TFR + baseline pipeline to avoid memory errors")
                 n_epochs_total = len(epochs)
-                n_channels = len(epochs.ch_names)
-                n_times = len(epochs.times)
-                n_freqs_val = len(freqs)
 
-                # Initialize accumulators
-                logger.debug("Initializing accumulators...")
-                averaged_power = np.zeros((n_channels, n_freqs_val, n_times), dtype=np.float64)
-                complex_average = np.zeros((n_channels, n_freqs_val, n_times), dtype=np.complex128) if compute_complex_average else None
-                itc_accumulator = np.zeros((n_channels, n_freqs_val, n_times), dtype=np.complex128) if compute_itc else None
-
-                # Get template info for creating final objects
-                template_epoch = epochs[0]
-                tfr_times = epochs.times
+                # We'll initialize accumulators after computing the first chunk
+                # because TFR output shape depends on picks='eeg' and decimation
+                averaged_power = None
+                complex_average = None
+                itc_accumulator = None
+                tfr_times = None
+                tfr_info = None
 
                 # Process in chunks
                 n_processed = 0
@@ -355,6 +350,17 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         # Extract complex data for this chunk
                         chunk_complex = chunk_tfr.data  # (chunk_size, n_channels, n_freqs, n_times)
 
+                        # Initialize accumulators on first chunk (now we know the actual TFR output shape)
+                        if averaged_power is None:
+                            _, n_channels_tfr, n_freqs_tfr, n_times_tfr = chunk_complex.shape
+                            logger.debug(f"  Initializing accumulators with TFR output shape: ({n_channels_tfr}, {n_freqs_tfr}, {n_times_tfr})")
+                            averaged_power = np.zeros((n_channels_tfr, n_freqs_tfr, n_times_tfr), dtype=np.float64)
+                            complex_average = np.zeros((n_channels_tfr, n_freqs_tfr, n_times_tfr), dtype=np.complex128) if compute_complex_average else None
+                            itc_accumulator = np.zeros((n_channels_tfr, n_freqs_tfr, n_times_tfr), dtype=np.complex128) if compute_itc else None
+                            tfr_times = chunk_tfr.times
+                            tfr_info = chunk_tfr.info
+                            logger.info(f"  Accumulators initialized: {n_channels_tfr} channels, {n_freqs_tfr} freqs, {n_times_tfr} time points")
+
                         # Accumulate complex average if requested
                         if compute_complex_average:
                             logger.debug(f"  Accumulating complex average...")
@@ -406,7 +412,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                     # Create ITC object
                     from mne.time_frequency import AverageTFR as TFR
                     itc = TFR(
-                        info=epochs.info,
+                        info=tfr_info,  # Use info from TFR (has correct channels)
                         data=itc_data,
                         times=tfr_times,
                         freqs=freqs,
@@ -420,7 +426,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 logger.info("Creating final AverageTFR object...")
                 from mne.time_frequency import AverageTFR as TFR
                 power = TFR(
-                    info=epochs.info,
+                    info=tfr_info,  # Use info from TFR (has correct channels)
                     data=averaged_power,
                     times=tfr_times,
                     freqs=freqs,
