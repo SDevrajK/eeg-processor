@@ -109,7 +109,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         baseline: Optional[Tuple[float, float]] = None,
                         baseline_mode: str = "logratio",
                         single_trial_baseline: bool = True,
-                        memory_limit_gb: float = 2.0,
+                        memory_limit_gb: Optional[float] = None,
                         **kwargs) -> AverageTFR:
     """
     Compute averaged time-frequency representation from epochs
@@ -125,12 +125,26 @@ def compute_epochs_tfr_average(epochs: Epochs,
         baseline: Baseline period (tmin, tmax) for correction
         baseline_mode: Baseline correction mode ('logratio', 'percent', 'zscore', 'mean', 'ratio')
         single_trial_baseline: If True, apply baseline correction per trial before averaging (recommended)
-        memory_limit_gb: Memory limit in GB for automatic chunking (default: 2.0)
+        memory_limit_gb: Memory limit in GB for automatic chunking (None = auto-detect, default: 25% of available RAM)
         **kwargs: Additional parameters for tfr functions
 
     Returns:
         AverageTFR object containing power and optionally ITC and complex average
     """
+
+    # Auto-detect memory limit if not specified
+    if memory_limit_gb is None:
+        try:
+            import psutil
+            available_gb = psutil.virtual_memory().available / (1024**3)
+            # Use 25% of available memory as default limit (conservative)
+            memory_limit_gb = max(2.0, available_gb * 0.25)
+            logger.info(f"Auto-detected memory limit: {memory_limit_gb:.1f} GB (25% of {available_gb:.1f} GB available)")
+        except ImportError:
+            # Fallback to conservative 2GB if psutil not available
+            memory_limit_gb = 2.0
+            logger.warning("psutil not available for memory detection. Using default 2.0 GB limit.")
+            logger.warning("Install psutil for automatic memory detection: pip install psutil")
 
     # Generate logarithmically spaced frequencies
     freqs = np.logspace(np.log10(freq_range[0]), np.log10(freq_range[1]), n_freqs)
