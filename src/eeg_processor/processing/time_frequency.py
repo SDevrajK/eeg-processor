@@ -308,6 +308,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 averaged_power = None
                 complex_average = None
                 itc_accumulator = None
+                itc = None  # Initialize ITC to None
                 tfr_times = None
                 tfr_info = None
 
@@ -415,38 +416,59 @@ def compute_epochs_tfr_average(epochs: Epochs,
 
                 # Finalize averages
                 logger.info("Finalizing averages...")
+                if averaged_power is None or tfr_info is None or tfr_times is None:
+                    raise RuntimeError("No chunks were successfully processed - cannot finalize TFR")
+
                 averaged_power /= n_epochs_total
 
-                if compute_complex_average:
+                if compute_complex_average and complex_average is not None:
                     complex_average /= n_epochs_total
                     logger.info("Complex average finalized")
 
-                if compute_itc:
+                if compute_itc and itc_accumulator is not None:
                     itc_data = np.abs(itc_accumulator / n_epochs_total)
-                    # Create ITC object
-                    from mne.time_frequency import AverageTFR as TFR
-                    itc = TFR(
-                        info=tfr_info,  # Use info from TFR (has correct channels)
-                        data=itc_data,
-                        times=tfr_times,
+                    # Create ITC object by copying structure from a template epoch
+                    logger.debug("Creating ITC AverageTFR object...")
+                    # Create a template AverageTFR from first epoch to get correct structure
+                    template_epochs = epochs[0:1]
+                    template_tfr = template_epochs.compute_tfr(
+                        method=method,
                         freqs=freqs,
-                        nave=n_epochs_total,
-                        comment="Inter-trial coherence (chunked)"
+                        n_cycles=n_cycles,
+                        use_fft=True,
+                        average=True,
+                        n_jobs=1,
+                        picks='eeg',
+                        verbose='WARNING',
+                        **kwargs
                     )
+                    itc = template_tfr.copy()
+                    itc.data = itc_data
+                    itc.nave = n_epochs_total
+                    itc.comment = "Inter-trial coherence (chunked)"
                     logger.info("ITC finalized")
-                    del itc_accumulator
+                    del itc_accumulator, template_epochs, template_tfr
 
                 # Create final AverageTFR object
                 logger.info("Creating final AverageTFR object...")
-                from mne.time_frequency import AverageTFR as TFR
-                power = TFR(
-                    info=tfr_info,  # Use info from TFR (has correct channels)
-                    data=averaged_power,
-                    times=tfr_times,
+                # Create a template AverageTFR from first epoch to get correct structure
+                template_epochs = epochs[0:1]
+                template_tfr = template_epochs.compute_tfr(
+                    method=method,
                     freqs=freqs,
-                    nave=n_epochs_total,
-                    comment=f"Single-trial baseline: {baseline_mode} (fully chunked: {chunk_size_int} epochs)"
+                    n_cycles=n_cycles,
+                    use_fft=True,
+                    average=True,
+                    n_jobs=1,
+                    picks='eeg',
+                    verbose='WARNING',
+                    **kwargs
                 )
+                power = template_tfr.copy()
+                power.data = averaged_power
+                power.nave = n_epochs_total
+                power.comment = f"Single-trial baseline: {baseline_mode} (fully chunked: {chunk_size_int} epochs)"
+                del template_epochs, template_tfr
 
                 logger.success(f"Fully chunked TFR + baseline complete: {n_processed} epochs processed")
 
