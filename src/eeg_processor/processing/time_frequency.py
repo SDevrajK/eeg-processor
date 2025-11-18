@@ -55,12 +55,23 @@ def apply_single_trial_baseline(power_data: np.ndarray,
     baseline_mean = np.mean(baseline_power, axis=-1, keepdims=True)
     baseline_std = np.std(baseline_power, axis=-1, keepdims=True)
 
-    # Prevent division by zero - use 1.0 if std is zero
-    baseline_std = np.where(baseline_std == 0, 1.0, baseline_std)
+    # Robust protection against division issues:
+    # 1. Replace NaN/Inf in mean with 0
+    # 2. Replace std < epsilon or NaN/Inf with 1.0 (no normalization)
+    epsilon = 1e-10
+    baseline_mean = np.nan_to_num(baseline_mean, nan=0.0, posinf=0.0, neginf=0.0)
+    baseline_std = np.where((baseline_std < epsilon) | ~np.isfinite(baseline_std), 1.0, baseline_std)
 
     # Apply z-score normalization to each trial
     # Shape: (n_epochs, n_channels, n_freqs, n_times)
     corrected_data = (power_data - baseline_mean) / baseline_std
+
+    # Final safety check: replace any remaining NaN/Inf values
+    # This should not happen with the protections above, but ensures robustness
+    n_invalid = np.sum(~np.isfinite(corrected_data))
+    if n_invalid > 0:
+        logger.warning(f"Found {n_invalid} NaN/Inf values in baseline-corrected data - replacing with 0")
+        corrected_data = np.nan_to_num(corrected_data, nan=0.0, posinf=0.0, neginf=0.0)
 
     return corrected_data
 
