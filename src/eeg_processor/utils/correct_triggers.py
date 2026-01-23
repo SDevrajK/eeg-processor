@@ -71,8 +71,8 @@ def _correct_alternating_triggers(raw: BaseRaw,
 
     # Extract epoch event codes from condition (check new 'triggers' format first)
     epoch_events = condition.get("triggers", {}) or condition.get("epoch_events", {})
-    if len(epoch_events) != 2:
-        raise ValueError(f"Alternating correction requires exactly 2 epoch events, got {len(epoch_events)}")
+    if len(epoch_events) == 0 or len(epoch_events) > 2:
+        raise ValueError(f"Alternating correction requires 1 or 2 epoch events, got {len(epoch_events)}")
 
     # Convert condition codes to actual event IDs using event_id mapping
     def get_event_id(code):
@@ -93,10 +93,19 @@ def _correct_alternating_triggers(raw: BaseRaw,
         logger.warning(f"Could not find event ID for code {code}, using as-is")
         return code
 
-    # Get the two alternating codes - assume onset comes first
+    # Get the alternating codes
     condition_codes = list(epoch_events.values())
     onset_code = get_event_id(condition_codes[0])  # First event should be onset
-    offset_code = get_event_id(condition_codes[1])  # Second event should be offset
+
+    if len(condition_codes) == 1:
+        # Infer the other code from the event sequence
+        offset_code = _infer_alternating_code(events, onset_code)
+        if offset_code is None:
+            raise ValueError(f"Could not infer alternating code for provided code {onset_code}")
+        logger.info(f"Inferred alternating code: {onset_code} <-> {offset_code}")
+    else:
+        offset_code = get_event_id(condition_codes[1])  # Second event should be offset
+
     expected_codes = {onset_code, offset_code}
 
     # Also include condition markers as valid (they shouldn't be corrected)  
@@ -150,6 +159,48 @@ def _correct_alternating_triggers(raw: BaseRaw,
 
     # Create new annotations from corrected events
     _update_raw_annotations(raw, events, event_id)
+
+
+def _infer_alternating_code(events: np.ndarray, known_code: int) -> Union[int, None]:
+    """
+    Infer the alternating code from event sequence.
+
+    Looks for a code that appears to alternate with the known_code by finding
+    which code most frequently appears adjacent to it in the sequence.
+
+    Args:
+        events: Events array [n_events, 3] with [sample, 0, event_id]
+        known_code: The code we know about
+
+    Returns:
+        The inferred alternating code, or None if cannot be determined
+    """
+    # Find all unique codes in the events
+    unique_codes = set(events[:, 2])
+    unique_codes.discard(known_code)
+
+    if len(unique_codes) == 0:
+        return None
+
+    # Find which code appears to alternate with known_code
+    # by counting adjacency (how often codes appear next to known_code)
+    adjacency_counts = {}
+    for i in range(len(events) - 1):
+        current_code = events[i, 2]
+        next_code = events[i + 1, 2]
+
+        if current_code == known_code and next_code != known_code:
+            adjacency_counts[next_code] = adjacency_counts.get(next_code, 0) + 1
+        elif next_code == known_code and current_code != known_code:
+            adjacency_counts[current_code] = adjacency_counts.get(current_code, 0) + 1
+
+    if not adjacency_counts:
+        return None
+
+    # Return the code with highest adjacency count
+    alternating_code = max(adjacency_counts, key=adjacency_counts.get)
+    logger.debug(f"Adjacency counts: {adjacency_counts}, selected: {alternating_code}")
+    return alternating_code
 
 
 def _determine_expected_code(events: np.ndarray,

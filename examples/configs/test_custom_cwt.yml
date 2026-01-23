@@ -1,0 +1,71 @@
+# Example configuration for testing custom_cwt (Morse wavelet) analysis
+# This config demonstrates the new experimental custom wavelet stage
+
+study:
+  name: "Custom_Wavelet_Test"
+  description: "Testing Morse wavelet time-frequency analysis"
+  researcher: "Development Team"
+
+paths:
+  raw_data: "data/raw/"  # Update with your path
+  results: "results/morse_test/"
+  file_extension: ".vhdr"  # Or .edf, .fif, etc.
+
+participants:
+  - "test-01.vhdr"  # Update with your participant files
+
+# Standard preprocessing pipeline
+processing:
+  # 1. Filter
+  - filter:
+      l_freq: 0.5
+      h_freq: 40.0
+
+  # 2. Detect and interpolate bad channels
+  - detect_bad_channels:
+      interpolate: true
+
+  # 3. Rereference to average
+  - rereference:
+      method: "average"
+
+  # 4. Epoch the data
+  - epoch:
+      tmin: -0.2
+      tmax: 0.8
+      baseline: [-0.2, 0]
+      reject:
+        eeg: 100e-6  # 100 µV
+
+  # 5. Custom wavelet analysis with Morse wavelets
+  - custom_cwt:
+      wavelet_type: "morse"
+      freq_range: [4, 40]  # 4-40 Hz
+      n_freqs: 50  # Number of frequency points
+
+      # Morse wavelet parameters
+      morse_gamma: 3.0  # Temporal resolution (higher = better time localization)
+      morse_beta: 3.0   # Frequency resolution (higher = better freq localization)
+
+      # Analysis options
+      compute_itc: true  # Compute inter-trial coherence
+      baseline: [-0.2, 0]  # Baseline period
+      baseline_mode: "mean"  # 'mean', 'ratio', 'logratio', 'percent', 'zscore'
+
+      # Advanced options
+      pad_len: 20  # Padding length in seconds
+
+# Experimental conditions
+conditions:
+  - name: "Standard"
+    condition_markers: [1, 11, "S1", "S11"]
+
+  - name: "Target"
+    condition_markers: [2, 12, "S2", "S12"]
+
+# Output settings
+output:
+  save_intermediates: true
+  figure_format: "png"
+  dpi: 150
+  create_report: true

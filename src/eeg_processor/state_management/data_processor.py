@@ -39,6 +39,7 @@ class DataProcessor:
             "time_frequency": self._time_frequency_analysis,
             "time_frequency_raw": self._time_frequency_raw_analysis,
             "time_frequency_average": self._time_frequency_average,
+            "custom_cwt": self._custom_cwt_analysis,
 
             # I/O operations
             "save_raw": self._save_raw,
@@ -421,6 +422,50 @@ class DataProcessor:
             return compute_epochs_tfr_average(data, method=method, **kwargs)
         else:
             raise ValueError(f"Unsupported data type for averaging: {type(data)}")
+
+    def _custom_cwt_analysis(self, data: Epochs,
+                            wavelet_type: str = "morse",
+                            freq_range: List[float] = [1, 50],
+                            n_freqs: int = 100,
+                            morse_gamma: float = 3.0,
+                            morse_beta: float = 3.0,
+                            compute_itc: bool = True,
+                            inplace: bool = False,  # Ignored - always creates new object
+                            **kwargs) -> AverageTFR:
+        """
+        Custom wavelet analysis for experimental/advanced time-frequency decomposition.
+
+        Uses custom wavelet families (currently Morse wavelets via clouddrift)
+        not available in MNE's standard methods.
+
+        Args:
+            data: Input epochs
+            wavelet_type: Type of custom wavelet (currently only 'morse' supported)
+            freq_range: [min_freq, max_freq] in Hz
+            n_freqs: Number of frequency points
+            morse_gamma: Morse gamma parameter (temporal resolution control)
+            morse_beta: Morse beta parameter (frequency resolution control)
+            compute_itc: Whether to compute inter-trial coherence
+            inplace: Ignored - custom CWT always creates new AverageTFR object
+            **kwargs: Additional parameters
+
+        Returns:
+            AverageTFR object with power (and optionally ITC)
+        """
+        if inplace:
+            logger.info("inplace=True ignored for custom_cwt - always creates new AverageTFR object")
+
+        from ..processing.custom_wavelet import compute_custom_cwt_tfr
+        return compute_custom_cwt_tfr(
+            epochs=data,
+            wavelet_type=wavelet_type,
+            freq_range=freq_range,
+            n_freqs=n_freqs,
+            morse_gamma=morse_gamma,
+            morse_beta=morse_beta,
+            compute_itc=compute_itc,
+            **kwargs
+        )
 
     def _view_data(self,
                    data: Union[BaseRaw, Epochs, Evoked],

@@ -56,16 +56,20 @@ class StageDocumentationExtractor:
             "time_frequency": "post_epoching",
             "time_frequency_raw": "post_epoching",
             "time_frequency_average": "post_epoching",
-            
+
+            # Experimental/advanced analysis
+            "custom_cwt": "experimental",
+
             # Visualization and other
             "view": "visualization"
         }
-        
+
         self.category_descriptions = {
             "data_handling": "Data preparation and event management",
             "preprocessing": "Signal filtering and artifact removal",
             "condition_handling": "Experimental condition processing and epoching",
             "post_epoching": "Analysis of epoched data",
+            "experimental": "Experimental and advanced analysis methods",
             "visualization": "Data visualization and inspection"
         }
     
