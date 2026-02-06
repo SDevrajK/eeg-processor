@@ -188,10 +188,13 @@ def compute_epochs_tfr_average(epochs: Epochs,
     # Set default number of cycles
     if n_cycles is None:
         if method == "morlet":
-            n_cycles = freqs / 2.0  # Standard: frequency/2 cycles
+            # Linear ramp: 3 cycles at lowest freq to 10 at highest.
+            # 3-cycle floor matches EEGLAB defaults and Cohen (2014) practical minimum;
+            # avoids the poor frequency resolution of freq/2 at low frequencies.
+            n_cycles = np.linspace(3, 10, len(freqs))
         else:
             n_cycles = 4.0  # Fixed cycles for multitaper
-    
+
     # Determine if we should use single-trial baseline correction
     use_single_trial = single_trial_baseline and baseline is not None
 
@@ -773,7 +776,10 @@ def compute_raw_tfr(raw: BaseRaw,
     # Set default number of cycles
     if n_cycles is None:
         if method == "morlet":
-            n_cycles = freqs / 2.0  # Standard: frequency/2 cycles
+            # Linear ramp: 3 cycles at lowest freq to 10 at highest.
+            # 3-cycle floor matches EEGLAB defaults and Cohen (2014) practical minimum;
+            # avoids the poor frequency resolution of freq/2 at low frequencies.
+            n_cycles = np.linspace(3, 10, len(freqs))
         else:
             n_cycles = 4.0  # Default for other methods
 
