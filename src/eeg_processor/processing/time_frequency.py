@@ -2,7 +2,7 @@ import gc
 import numpy as np
 from mne import Epochs
 from mne.io import BaseRaw
-from mne.time_frequency import tfr_morlet, tfr_multitaper, AverageTFR, Spectrum
+from mne.time_frequency import tfr_morlet, tfr_multitaper, AverageTFR, AverageTFRArray, Spectrum
 from typing import List, Union, Optional, Tuple
 from loguru import logger
 from ..utils.memory_tools import memory_profile, get_mne_object_memory
@@ -897,8 +897,8 @@ def compute_raw_tfr_average(raw_tfr,
     else:
         raise ValueError(f"Unknown averaging method: '{method}'. Use 'mean' or 'median'")
 
-    # Create AverageTFR using the proper class method
-    averaged_tfr = AverageTFR(
+    # AverageTFRArray is the data constructor (AverageTFR.__init__ is a computation constructor in MNE ≥1.7)
+    averaged_tfr = AverageTFRArray(
         info=raw_tfr.info,
         data=averaged_data,
         times=np.array([0.0]),
