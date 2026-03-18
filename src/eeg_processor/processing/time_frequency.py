@@ -166,13 +166,15 @@ def compute_epochs_tfr_average(epochs: Epochs,
         logger.info(f"Loading external rest baseline from: {external_baseline}")
         baseline_tfr = read_tfrs(external_baseline)
 
-        # Validate channels match
-        task_ch_names = [ch for ch in epochs.ch_names if ch in epochs.info['ch_names']]
-        if baseline_tfr.ch_names != epochs.ch_names:
+        # Validate EEG channels match (epochs may still have EOG/trigger channels at this point)
+        import mne
+        eeg_picks = mne.pick_types(epochs.info, eeg=True)
+        task_eeg_ch_names = [epochs.ch_names[i] for i in eeg_picks]
+        if baseline_tfr.ch_names != task_eeg_ch_names:
             raise ValueError(
-                f"Channel mismatch between external baseline and epochs.\n"
+                f"Channel mismatch between external baseline and epochs (EEG channels only).\n"
                 f"Baseline: {baseline_tfr.ch_names}\n"
-                f"Epochs:   {epochs.ch_names}"
+                f"Epochs EEG: {task_eeg_ch_names}"
             )
 
         # Validate frequencies match (will be computed below, so check freq_range/n_freqs match)
