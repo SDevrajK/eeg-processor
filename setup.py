@@ -9,7 +9,7 @@ except FileNotFoundError:
 
 setup(
     name="eeg-processor",
-    version="0.1.0",
+    version="0.2.1",
     author="Your Name",  # TODO: Update with actual author
     author_email="your.email@example.com",  # TODO: Update with actual email
     description="A comprehensive EEG processing pipeline with quality control and reporting",
