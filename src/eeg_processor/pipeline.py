@@ -267,7 +267,22 @@ class EEGPipeline:
             try:
                 # Add participant info to stage params for stages that need it
                 stage_params_with_info = stage_params.copy()
-                
+
+                # Inject external baseline path when stage explicitly requests it
+                if (stage_name == "time_frequency"
+                        and stage_params_with_info.get('baseline') == 'external'
+                        and self.config.baseline_data_dir):
+                    clean_id = participant.id.replace("_", "").replace("-", "")
+                    baseline_path = (self.config.baseline_data_dir / "processed" /
+                                     f"sub-{clean_id}_task-baseline_desc-tfr.h5")
+                    if not baseline_path.exists():
+                        raise RuntimeError(
+                            f"External baseline file not found for {participant.id}: {baseline_path}"
+                        )
+                    stage_params_with_info['external_baseline'] = str(baseline_path)
+                    del stage_params_with_info['baseline']  # Remove sentinel value before passing to stage
+                    logger.debug(f"Using external baseline: {baseline_path}")
+
                 # Only add participant_info for stages that need it
                 stages_needing_participant_info = ['crop_participant_segment']
                 if stage_name in stages_needing_participant_info:

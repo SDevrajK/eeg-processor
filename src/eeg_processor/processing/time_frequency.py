@@ -8,6 +8,44 @@ from loguru import logger
 from ..utils.memory_tools import memory_profile, get_mne_object_memory
 
 
+def apply_logratio_baseline(power_data: np.ndarray,
+                           baseline_power: np.ndarray) -> np.ndarray:
+    """
+    Apply logratio (dB) baseline correction using an external reference.
+
+    For each trial independently:
+        10 * log10(power / baseline_mean)
+
+    Suitable for rest-baseline normalization where the baseline is estimated
+    from a separate recording (e.g., pre-task resting state). Unlike z-score,
+    this method requires only a mean estimate, making it robust for short
+    baseline windows and slow frequencies (theta/delta).
+
+    Args:
+        power_data: Power data (n_epochs, n_channels, n_freqs, n_times)
+        baseline_power: Mean baseline power (n_channels, n_freqs) from rest recording
+
+    Returns:
+        dB-normalized power data (same shape as power_data)
+    """
+    # Expand baseline to broadcast: (1, n_channels, n_freqs, 1)
+    baseline = baseline_power[np.newaxis, :, :, np.newaxis]
+
+    epsilon = 1e-30  # Prevent log(0)
+    ratio = power_data / (baseline + epsilon)
+
+    # Replace non-positive ratios before log (should not occur with real power data)
+    ratio = np.where(ratio > 0, ratio, epsilon)
+    db_data = 10 * np.log10(ratio)
+
+    n_invalid = np.sum(~np.isfinite(db_data))
+    if n_invalid > 0:
+        logger.warning(f"Found {n_invalid} NaN/Inf values after logratio baseline — replacing with 0")
+        db_data = np.nan_to_num(db_data, nan=0.0, posinf=0.0, neginf=0.0)
+
+    return db_data
+
+
 def apply_single_trial_baseline(power_data: np.ndarray,
                                times: np.ndarray,
                                baseline: Tuple[float, float]) -> np.ndarray:
@@ -86,6 +124,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         compute_complex_average: bool = False,
                         baseline: Optional[Tuple[float, float]] = None,
                         single_trial_baseline: bool = True,
+                        external_baseline: Optional[str] = None,
                         memory_limit_gb: Optional[float] = None,
                         **kwargs) -> AverageTFR:
     """
@@ -102,9 +141,13 @@ def compute_epochs_tfr_average(epochs: Epochs,
         n_cycles: Cycles per frequency (auto-computed if None)
         compute_itc: Whether to compute inter-trial coherence
         compute_complex_average: Whether to compute and store complex average
-        baseline: Baseline period (tmin, tmax) for z-score correction
+        baseline: Baseline period (tmin, tmax) for within-epoch z-score correction
         single_trial_baseline: If True, apply z-score baseline per trial before averaging
                                If False, compute average first then apply MNE's baseline
+        external_baseline: Path to AverageTFR .h5 file from a separate rest recording.
+                           When provided, applies logratio (dB) normalization per trial
+                           using the rest mean power instead of within-epoch z-score.
+                           The baseline file must have matching channels and frequencies.
         memory_limit_gb: Memory limit in GB for chunking (None = auto-detect)
         **kwargs: Additional parameters for tfr functions
 
@@ -115,6 +158,40 @@ def compute_epochs_tfr_average(epochs: Epochs,
         Grandchamp & Delorme (2011) Front. Psychol. 2:236
         doi: 10.3389/fpsyg.2011.00236
     """
+
+    # Load and validate external baseline if provided
+    rest_baseline_power = None
+    if external_baseline is not None:
+        from mne.time_frequency import read_tfrs
+        logger.info(f"Loading external rest baseline from: {external_baseline}")
+        baseline_tfr = read_tfrs(external_baseline)
+
+        # Validate channels match
+        task_ch_names = [ch for ch in epochs.ch_names if ch in epochs.info['ch_names']]
+        if baseline_tfr.ch_names != epochs.ch_names:
+            raise ValueError(
+                f"Channel mismatch between external baseline and epochs.\n"
+                f"Baseline: {baseline_tfr.ch_names}\n"
+                f"Epochs:   {epochs.ch_names}"
+            )
+
+        # Validate frequencies match (will be computed below, so check freq_range/n_freqs match)
+        expected_freqs = np.logspace(np.log10(freq_range[0]), np.log10(freq_range[1]), n_freqs)
+        if len(baseline_tfr.freqs) != len(expected_freqs) or not np.allclose(baseline_tfr.freqs, expected_freqs, rtol=1e-3):
+            raise ValueError(
+                f"Frequency mismatch between external baseline and task TFR parameters.\n"
+                f"Baseline has {len(baseline_tfr.freqs)} freqs ({baseline_tfr.freqs[0]:.2f}-{baseline_tfr.freqs[-1]:.2f} Hz).\n"
+                f"Task config expects {n_freqs} freqs ({freq_range[0]}-{freq_range[1]} Hz).\n"
+                f"Ensure both configs use identical freq_range and n_freqs."
+            )
+
+        # Extract mean power: (n_channels, n_freqs, 1) → (n_channels, n_freqs)
+        rest_baseline_power = baseline_tfr.data.squeeze(axis=-1)
+        logger.info(f"External baseline loaded: {rest_baseline_power.shape} (channels × freqs), "
+                    f"mean power range: {rest_baseline_power.min():.2e} - {rest_baseline_power.max():.2e}")
+
+        # Force per-trial processing regardless of single_trial_baseline flag
+        single_trial_baseline = True
 
     # Auto-detect memory limit if not specified
     if memory_limit_gb is None:
@@ -398,9 +475,12 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         # Convert to power and apply baseline correction
                         logger.debug(f"  Converting to power and applying baseline...")
                         chunk_power = np.abs(chunk_complex) ** 2
-                        corrected_chunk_power = apply_single_trial_baseline(
-                            chunk_power, chunk_tfr.times, baseline
-                        )
+                        if rest_baseline_power is not None:
+                            corrected_chunk_power = apply_logratio_baseline(chunk_power, rest_baseline_power)
+                        else:
+                            corrected_chunk_power = apply_single_trial_baseline(
+                                chunk_power, chunk_tfr.times, baseline
+                            )
 
                         # Accumulate corrected power
                         averaged_power += np.sum(corrected_chunk_power, axis=0)
@@ -473,7 +553,8 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 power = template_tfr.copy()
                 power.data = averaged_power
                 power.nave = n_epochs_total
-                power.comment = f"Single-trial baseline: z-score (fully chunked: {chunk_size_int} epochs)"
+                baseline_desc = "logratio/dB (external rest)" if rest_baseline_power is not None else "z-score"
+                power.comment = f"Single-trial baseline: {baseline_desc} (fully chunked: {chunk_size_int} epochs)"
                 del template_epochs, template_tfr
 
                 logger.success(f"Fully chunked TFR + baseline complete: {n_processed} epochs processed")
@@ -531,10 +612,14 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         logger.debug(f"  Power computed: shape={chunk_power.shape}, min={chunk_power.min():.2e}, max={chunk_power.max():.2e}")
 
                         # Apply baseline correction to chunk
-                        logger.debug(f"  Applying baseline correction (mode=z-score, baseline={baseline})...")
-                        corrected_chunk_power = apply_single_trial_baseline(
-                            chunk_power, epochs_tfr.times, baseline  # type: ignore
-                        )
+                        if rest_baseline_power is not None:
+                            logger.debug(f"  Applying logratio baseline correction (external rest baseline)...")
+                            corrected_chunk_power = apply_logratio_baseline(chunk_power, rest_baseline_power)
+                        else:
+                            logger.debug(f"  Applying z-score baseline correction (baseline={baseline})...")
+                            corrected_chunk_power = apply_single_trial_baseline(
+                                chunk_power, epochs_tfr.times, baseline  # type: ignore
+                            )
                         logger.debug(f"  Baseline correction complete: min={corrected_chunk_power.min():.2e}, max={corrected_chunk_power.max():.2e}")
 
                         # Accumulate corrected power (sum across trials in chunk)
@@ -582,7 +667,8 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 power = epochs_tfr.copy()
                 power = power.average()  # Convert EpochsTFR to AverageTFR
                 power.data = averaged_power  # Replace with baseline-corrected averaged data
-                power.comment = f"Single-trial baseline: z-score (chunked: {chunk_size_int} epochs)"
+                baseline_desc = "logratio/dB (external rest)" if rest_baseline_power is not None else "z-score"
+                power.comment = f"Single-trial baseline: {baseline_desc} (chunked: {chunk_size_int} epochs)"
 
                 # Free the large complex_data array
                 del complex_data

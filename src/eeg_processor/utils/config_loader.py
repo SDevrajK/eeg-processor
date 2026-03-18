@@ -17,6 +17,7 @@ class PipelineConfig:
     study_info: Dict[str, Any]
     output_config: Dict[str, Any]
     dataset_name: Optional[str] = None
+    baseline_data_dir: Optional[Path] = None
     
     @property
     def processed_dir(self) -> Path:
@@ -240,6 +241,13 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     
     results_dir = Path(results_dir)
 
+    # Parse optional baseline data directory
+    baseline_data_dir = abs_paths.get('baseline_data')
+    if baseline_data_dir:
+        baseline_data_dir = Path(baseline_data_dir)
+        if not baseline_data_dir.exists():
+            raise ValidationError(f"baseline_data directory does not exist: {baseline_data_dir}")
+
     # Validate conditions
     conditions = raw_config.get('conditions', [])
     if not isinstance(conditions, list):
@@ -285,7 +293,37 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
     processing_stages = raw_config.get('processing', [])
     if not isinstance(processing_stages, list):
         raise ValidationError("'processing' must be a list")
-    
+
+    # Validate individual stage parameters
+    tfr_stages_with_external = []
+    for stage_config in processing_stages:
+        if not isinstance(stage_config, dict) or len(stage_config) != 1:
+            raise ValidationError(f"Each processing stage must be a single-key dict, got: {stage_config}")
+        stage_name = next(iter(stage_config))
+        stage_params = stage_config[stage_name] or {}
+
+        if stage_name == "time_frequency":
+            baseline_val = stage_params.get('baseline') if isinstance(stage_params, dict) else None
+            if baseline_val == 'external':
+                tfr_stages_with_external.append(stage_name)
+                if not baseline_data_dir:
+                    raise ValidationError(
+                        "time_frequency stage has baseline: 'external' but 'baseline_data' is not set under paths. "
+                        "Add baseline_data to paths pointing to the rest baseline results directory."
+                    )
+            elif baseline_data_dir and baseline_val is not None:
+                raise ValidationError(
+                    f"time_frequency stage has baseline: {baseline_val!r} but 'baseline_data' is also set under paths. "
+                    "Use baseline: 'external' to use the rest baseline, or remove baseline_data from paths."
+                )
+
+    # If baseline_data_dir is set, at least one time_frequency stage must use it
+    if baseline_data_dir and not tfr_stages_with_external:
+        raise ValidationError(
+            "'baseline_data' is set under paths but no time_frequency stage has baseline: 'external'. "
+            "Either add baseline: 'external' to a time_frequency stage or remove baseline_data from paths."
+        )
+
     # Validate output configuration
     output_config = raw_config.get('output', {})
     if not isinstance(output_config, dict):
@@ -300,7 +338,8 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
         conditions=conditions,
         study_info=study_info,
         output_config=output_config,
-        dataset_name=dataset_name
+        dataset_name=dataset_name,
+        baseline_data_dir=baseline_data_dir
     )
 
 
