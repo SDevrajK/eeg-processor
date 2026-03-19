@@ -304,6 +304,7 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
 
         if stage_name == "time_frequency":
             baseline_val = stage_params.get('baseline') if isinstance(stage_params, dict) else None
+            baseline_mode_val = stage_params.get('baseline_mode') if isinstance(stage_params, dict) else None
             if baseline_val == 'external':
                 tfr_stages_with_external.append(stage_name)
                 if not baseline_data_dir:
@@ -311,10 +312,21 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
                         "time_frequency stage has baseline: 'external' but 'baseline_data' is not set under paths. "
                         "Add baseline_data to paths pointing to the rest baseline results directory."
                     )
+                if baseline_mode_val == 'zscore':
+                    raise ValidationError(
+                        "time_frequency stage has baseline_mode: 'zscore' with baseline: 'external'. "
+                        "The rest recording provides only a mean (no std), so z-score is not supported. "
+                        "Use baseline_mode: 'logratio' or omit baseline_mode (defaults to logratio for external baseline)."
+                    )
             elif baseline_data_dir and baseline_val is not None:
                 raise ValidationError(
                     f"time_frequency stage has baseline: {baseline_val!r} but 'baseline_data' is also set under paths. "
                     "Use baseline: 'external' to use the rest baseline, or remove baseline_data from paths."
+                )
+            if baseline_mode_val is not None and baseline_mode_val not in ('zscore', 'logratio'):
+                raise ValidationError(
+                    f"time_frequency stage has invalid baseline_mode: {baseline_mode_val!r}. "
+                    "Must be 'zscore' or 'logratio'."
                 )
 
     # If baseline_data_dir is set, at least one time_frequency stage must use it

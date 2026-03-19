@@ -46,6 +46,51 @@ def apply_logratio_baseline(power_data: np.ndarray,
     return db_data
 
 
+def apply_within_epoch_logratio_baseline(power_data: np.ndarray,
+                                        times: np.ndarray,
+                                        baseline: Tuple[float, float]) -> np.ndarray:
+    """
+    Apply per-trial logratio (dB) baseline correction using a within-epoch baseline window.
+
+    For each trial independently:
+        10 * log10(power / baseline_mean)
+
+    where baseline_mean is computed from the specified time window within that trial.
+
+    Args:
+        power_data: Power data (n_epochs, n_channels, n_freqs, n_times)
+        times: Time vector
+        baseline: Baseline period (tmin, tmax) in seconds
+
+    Returns:
+        dB-normalized power data (same shape as input)
+    """
+    baseline_mask = (times >= baseline[0]) & (times <= baseline[1])
+    baseline_indices = np.where(baseline_mask)[0]
+
+    if len(baseline_indices) == 0:
+        raise ValueError(
+            f"No baseline samples found in interval {baseline}. "
+            f"Time range: [{times[0]:.3f}, {times[-1]:.3f}]"
+        )
+
+    # Per-trial baseline mean: (n_epochs, n_channels, n_freqs, 1)
+    baseline_mean = np.mean(power_data[..., baseline_indices], axis=-1, keepdims=True)
+    baseline_mean = np.nan_to_num(baseline_mean, nan=0.0, posinf=0.0, neginf=0.0)
+
+    epsilon = 1e-30
+    ratio = power_data / (baseline_mean + epsilon)
+    ratio = np.where(ratio > 0, ratio, epsilon)
+    db_data = 10 * np.log10(ratio)
+
+    n_invalid = np.sum(~np.isfinite(db_data))
+    if n_invalid > 0:
+        logger.warning(f"Found {n_invalid} NaN/Inf values after within-epoch logratio — replacing with 0")
+        db_data = np.nan_to_num(db_data, nan=0.0, posinf=0.0, neginf=0.0)
+
+    return db_data
+
+
 def apply_single_trial_baseline(power_data: np.ndarray,
                                times: np.ndarray,
                                baseline: Tuple[float, float]) -> np.ndarray:
@@ -123,6 +168,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         compute_itc: bool = True,
                         compute_complex_average: bool = False,
                         baseline: Optional[Tuple[float, float]] = None,
+                        baseline_mode: Optional[str] = None,
                         single_trial_baseline: bool = True,
                         external_baseline: Optional[str] = None,
                         memory_limit_gb: Optional[float] = None,
@@ -141,13 +187,17 @@ def compute_epochs_tfr_average(epochs: Epochs,
         n_cycles: Cycles per frequency (auto-computed if None)
         compute_itc: Whether to compute inter-trial coherence
         compute_complex_average: Whether to compute and store complex average
-        baseline: Baseline period (tmin, tmax) for within-epoch z-score correction
-        single_trial_baseline: If True, apply z-score baseline per trial before averaging
+        baseline: Baseline period (tmin, tmax) for within-epoch correction
+        baseline_mode: Normalization method: 'zscore' (Grandchamp & Delorme 2011) or
+                       'logratio' (dB: 10*log10(power/baseline)). Defaults to 'logratio'
+                       when external_baseline is set, 'zscore' otherwise.
+                       Note: 'zscore' is incompatible with external_baseline (no std available).
+        single_trial_baseline: If True, apply baseline per trial before averaging
                                If False, compute average first then apply MNE's baseline
         external_baseline: Path to AverageTFR .h5 file from a separate rest recording.
                            When provided, applies logratio (dB) normalization per trial
-                           using the rest mean power instead of within-epoch z-score.
-                           The baseline file must have matching channels and frequencies.
+                           using the rest mean power. The baseline file must have matching
+                           channels and frequencies.
         memory_limit_gb: Memory limit in GB for chunking (None = auto-detect)
         **kwargs: Additional parameters for tfr functions
 
@@ -158,6 +208,18 @@ def compute_epochs_tfr_average(epochs: Epochs,
         Grandchamp & Delorme (2011) Front. Psychol. 2:236
         doi: 10.3389/fpsyg.2011.00236
     """
+
+    # Validate and resolve baseline_mode
+    valid_modes = ('zscore', 'logratio')
+    if baseline_mode is not None and baseline_mode not in valid_modes:
+        raise ValueError(f"baseline_mode must be one of {valid_modes}, got '{baseline_mode}'")
+    if baseline_mode == 'zscore' and external_baseline is not None:
+        raise ValueError(
+            "baseline_mode='zscore' is incompatible with external_baseline: the rest recording "
+            "provides only a mean (no std). Use baseline_mode='logratio' with external_baseline."
+        )
+    # Resolve effective mode: default to 'logratio' for external baseline, 'zscore' for within-epoch
+    effective_baseline_mode = baseline_mode or ('logratio' if external_baseline is not None else 'zscore')
 
     # Load and validate external baseline if provided
     rest_baseline_power = None
@@ -380,7 +442,8 @@ def compute_epochs_tfr_average(epochs: Epochs,
     # Handle single-trial baseline correction with memory-efficient chunked processing
     if use_single_trial:
         try:
-            logger.info(f"Applying single-trial baseline correction: {baseline}, mode: z-score")
+            baseline_src = "external rest" if rest_baseline_power is not None else "within-epoch"
+            logger.info(f"Applying single-trial baseline correction: {baseline}, mode: {effective_baseline_mode} ({baseline_src})")
 
             # Check if we need to compute TFR in chunks (for very large datasets)
             if epochs_tfr is None:
@@ -477,9 +540,14 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         # Convert to power and apply baseline correction
                         logger.debug(f"  Converting to power and applying baseline...")
                         chunk_power = np.abs(chunk_complex) ** 2
-                        if rest_baseline_power is not None:
-                            corrected_chunk_power = apply_logratio_baseline(chunk_power, rest_baseline_power)
-                        else:
+                        if effective_baseline_mode == 'logratio':
+                            if rest_baseline_power is not None:
+                                corrected_chunk_power = apply_logratio_baseline(chunk_power, rest_baseline_power)
+                            else:
+                                corrected_chunk_power = apply_within_epoch_logratio_baseline(
+                                    chunk_power, chunk_tfr.times, baseline
+                                )
+                        else:  # zscore
                             corrected_chunk_power = apply_single_trial_baseline(
                                 chunk_power, chunk_tfr.times, baseline
                             )
@@ -555,8 +623,8 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 power = template_tfr.copy()
                 power.data = averaged_power
                 power.nave = n_epochs_total
-                baseline_desc = "logratio/dB (external rest)" if rest_baseline_power is not None else "z-score"
-                power.comment = f"Single-trial baseline: {baseline_desc} (fully chunked: {chunk_size_int} epochs)"
+                baseline_src = "external rest" if rest_baseline_power is not None else "within-epoch"
+                power.comment = f"Single-trial baseline: {effective_baseline_mode} ({baseline_src}, fully chunked: {chunk_size_int} epochs)"
                 del template_epochs, template_tfr
 
                 logger.success(f"Fully chunked TFR + baseline complete: {n_processed} epochs processed")
@@ -614,10 +682,16 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         logger.debug(f"  Power computed: shape={chunk_power.shape}, min={chunk_power.min():.2e}, max={chunk_power.max():.2e}")
 
                         # Apply baseline correction to chunk
-                        if rest_baseline_power is not None:
-                            logger.debug(f"  Applying logratio baseline correction (external rest baseline)...")
-                            corrected_chunk_power = apply_logratio_baseline(chunk_power, rest_baseline_power)
-                        else:
+                        if effective_baseline_mode == 'logratio':
+                            if rest_baseline_power is not None:
+                                logger.debug(f"  Applying logratio baseline correction (external rest baseline)...")
+                                corrected_chunk_power = apply_logratio_baseline(chunk_power, rest_baseline_power)
+                            else:
+                                logger.debug(f"  Applying logratio baseline correction (within-epoch, baseline={baseline})...")
+                                corrected_chunk_power = apply_within_epoch_logratio_baseline(
+                                    chunk_power, epochs_tfr.times, baseline  # type: ignore
+                                )
+                        else:  # zscore
                             logger.debug(f"  Applying z-score baseline correction (baseline={baseline})...")
                             corrected_chunk_power = apply_single_trial_baseline(
                                 chunk_power, epochs_tfr.times, baseline  # type: ignore
@@ -669,8 +743,8 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 power = epochs_tfr.copy()
                 power = power.average()  # Convert EpochsTFR to AverageTFR
                 power.data = averaged_power  # Replace with baseline-corrected averaged data
-                baseline_desc = "logratio/dB (external rest)" if rest_baseline_power is not None else "z-score"
-                power.comment = f"Single-trial baseline: {baseline_desc} (chunked: {chunk_size_int} epochs)"
+                baseline_src = "external rest" if rest_baseline_power is not None else "within-epoch"
+                power.comment = f"Single-trial baseline: {effective_baseline_mode} ({baseline_src}, chunked: {chunk_size_int} epochs)"
 
                 # Free the large complex_data array
                 del complex_data
