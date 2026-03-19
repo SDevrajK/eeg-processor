@@ -276,7 +276,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
     logger.info(f"Computing TFR: {freq_range[0]}-{freq_range[1]} Hz, {n_freqs} frequencies")
 
     # Memory estimation for single-trial baseline correction
-    use_single_trial = single_trial_baseline and baseline is not None
+    use_single_trial = single_trial_baseline and (baseline is not None or rest_baseline_power is not None)
     if use_single_trial:
         n_epochs, n_channels, n_times = len(epochs), len(epochs.ch_names), len(epochs.times)
     
@@ -337,7 +337,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
             n_cycles = 4.0  # Fixed cycles for multitaper
 
     # Determine if we should use single-trial baseline correction
-    use_single_trial = single_trial_baseline and baseline is not None
+    use_single_trial = single_trial_baseline and (baseline is not None or rest_baseline_power is not None)
 
     # For large datasets with single-trial baseline, compute TFR in chunks to avoid memory errors
     if use_single_trial and optimal_chunk_size is not None and optimal_chunk_size < len(epochs):
