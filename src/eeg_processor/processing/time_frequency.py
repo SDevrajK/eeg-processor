@@ -172,6 +172,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         single_trial_baseline: bool = True,
                         external_baseline: Optional[str] = None,
                         memory_limit_gb: Optional[float] = None,
+                        output: str = "total",
                         **kwargs) -> AverageTFR:
     """
     Compute averaged time-frequency representation from epochs.
@@ -199,6 +200,10 @@ def compute_epochs_tfr_average(epochs: Epochs,
                            using the rest mean power. The baseline file must have matching
                            channels and frequencies.
         memory_limit_gb: Memory limit in GB for chunking (None = auto-detect)
+        output: Type of power to compute: 'total' (default), 'evoked', or 'induced'.
+                'total': average of |TFR|² across trials
+                'evoked': |TFR of averaged ERP|² (phase-locked oscillations)
+                'induced': TFR after subtracting ERP from each trial (non-phase-locked)
         **kwargs: Additional parameters for tfr functions
 
     Returns:
@@ -220,6 +225,69 @@ def compute_epochs_tfr_average(epochs: Epochs,
         )
     # Resolve effective mode: default to 'logratio' for external baseline, 'zscore' for within-epoch
     effective_baseline_mode = baseline_mode or ('logratio' if external_baseline is not None else 'zscore')
+
+    # Validate and handle output type
+    valid_outputs = ('total', 'evoked', 'induced')
+    if output not in valid_outputs:
+        raise ValueError(f"output must be one of {valid_outputs}, got '{output}'")
+
+    # Handle "evoked" output: compute TFR of averaged ERP (early return path)
+    if output == "evoked":
+        if compute_itc:
+            logger.warning("compute_itc=True ignored for output='evoked' (no trials to compute ITC from)")
+
+        freqs = np.logspace(np.log10(freq_range[0]), np.log10(freq_range[1]), n_freqs)
+        logger.info(f"Computing evoked power TFR: {freq_range[0]}-{freq_range[1]} Hz, {n_freqs} frequencies")
+
+        # Set default number of cycles
+        if n_cycles is None:
+            if method == "morlet":
+                n_cycles = np.linspace(3, 10, len(freqs))
+            else:
+                n_cycles = 4.0
+
+        # Average epochs to get evoked response
+        logger.info("Averaging epochs to compute evoked response...")
+        evoked = epochs.average()
+
+        # Compute TFR of the evoked average
+        logger.info(f"Computing {method} TFR of evoked response...")
+        try:
+            power = evoked.compute_tfr(
+                method=method,
+                freqs=freqs,
+                n_cycles=n_cycles,
+                use_fft=True,
+                n_jobs=4,
+                picks='eeg',
+                verbose='INFO',
+                **kwargs
+            )
+            logger.debug(f"TFR computation complete. Power shape: {power.data.shape}")
+
+            # Apply baseline correction if specified
+            if baseline is not None:
+                baseline_mode_for_evoked = baseline_mode or "percent"
+                logger.info(f"Applying baseline correction: {baseline}, mode: {baseline_mode_for_evoked}")
+                power.apply_baseline(baseline=baseline, mode=baseline_mode_for_evoked)
+
+            logger.success(f"Evoked power TFR computed: {power.data.shape}")
+            return power
+
+        except Exception as e:
+            logger.error(f"TFR computation of evoked response failed: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            raise
+
+    # Handle "induced" output: subtract ERP from each epoch before TFR (pre-processing)
+    if output == "induced":
+        logger.info("Induced power mode: subtracting ERP from each epoch (isolates non-phase-locked activity)")
+        epochs = epochs.copy()
+        evoked_to_subtract = epochs.average()
+        epochs.subtract_evoked(evoked_to_subtract)
+        logger.info("ERP subtracted from all epochs - proceeding with normal TFR computation")
+        # Continue with normal TFR computation flow below (output='total' path)
 
     # Load and validate external baseline if provided
     rest_baseline_power = None
@@ -376,18 +444,33 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 else:
                     # Original implementation for backward compatibility
                     logger.debug(f"Computing averaged TFR (traditional pipeline)...")
-                    power, itc = epochs.compute_tfr(
-                        method=method,
-                        freqs=freqs,
-                        n_cycles=n_cycles,
-                        use_fft=True,
-                        return_itc=compute_itc,
-                        average=True,  # Return AverageTFR, not EpochsTFR
-                        n_jobs=4,
-                        picks='eeg',
-                        verbose='INFO',
-                        **kwargs
-                    )
+                    if compute_itc:
+                        power, itc = epochs.compute_tfr(
+                            method=method,
+                            freqs=freqs,
+                            n_cycles=n_cycles,
+                            use_fft=True,
+                            return_itc=True,
+                            average=True,  # Return AverageTFR, not EpochsTFR
+                            n_jobs=4,
+                            picks='eeg',
+                            verbose='INFO',
+                            **kwargs
+                        )
+                    else:
+                        power = epochs.compute_tfr(
+                            method=method,
+                            freqs=freqs,
+                            n_cycles=n_cycles,
+                            use_fft=True,
+                            return_itc=False,
+                            average=True,  # Return AverageTFR, not EpochsTFR
+                            n_jobs=4,
+                            picks='eeg',
+                            verbose='INFO',
+                            **kwargs
+                        )
+                        itc = None
                     logger.debug(f"TFR computation complete. Power shape: {power.data.shape}")
 
             elif method == "multitaper":
@@ -414,18 +497,33 @@ def compute_epochs_tfr_average(epochs: Epochs,
                 else:
                     # Original implementation for backward compatibility
                     logger.debug(f"Computing averaged TFR (traditional pipeline)...")
-                    power, itc = epochs.compute_tfr(
-                        method=method,
-                        freqs=freqs,
-                        n_cycles=n_cycles,
-                        use_fft=True,
-                        return_itc=compute_itc,
-                        average=True,  # Return AverageTFR, not EpochsTFR
-                        n_jobs=4,
-                        verbose='INFO',
-                        picks='eeg',
-                        **kwargs
-                    )
+                    if compute_itc:
+                        power, itc = epochs.compute_tfr(
+                            method=method,
+                            freqs=freqs,
+                            n_cycles=n_cycles,
+                            use_fft=True,
+                            return_itc=True,
+                            average=True,  # Return AverageTFR, not EpochsTFR
+                            n_jobs=4,
+                            verbose='INFO',
+                            picks='eeg',
+                            **kwargs
+                        )
+                    else:
+                        power = epochs.compute_tfr(
+                            method=method,
+                            freqs=freqs,
+                            n_cycles=n_cycles,
+                            use_fft=True,
+                            return_itc=False,
+                            average=True,  # Return AverageTFR, not EpochsTFR
+                            n_jobs=4,
+                            verbose='INFO',
+                            picks='eeg',
+                            **kwargs
+                        )
+                        itc = None
                     logger.debug(f"TFR computation complete. Power shape: {power.data.shape}")
             else:
                 raise ValueError(f"Unknown TFR method: {method}")
@@ -808,13 +906,13 @@ def compute_epochs_tfr_average(epochs: Epochs,
         power.comment = f"ITC computed: {method} method"
         power._itc_data = itc        # Store ITC as an attribute on the power object
         logger.info("ITC data stored with power object")
-    
+
         # Store complex average in power object if computed
         if compute_complex_average and 'complex_average' in locals() and complex_average is not None:
             power._complex_average = complex_average  # Store complex average as an attribute
             logger.info("Complex average stored with power object")
-    
-        return power
+
+    return power
 
 
 def get_frequency_bands() -> dict:

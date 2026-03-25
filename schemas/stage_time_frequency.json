@@ -45,6 +45,12 @@
     "baseline_mode": {
       "type": "string",
       "default": "percent"
+    },
+    "output": {
+      "type": "string",
+      "default": "total",
+      "enum": ["total", "evoked", "induced"],
+      "description": "Type of power to compute: 'total' (average of |TFR|² across trials), 'evoked' (|TFR of averaged ERP|²), or 'induced' (TFR after subtracting ERP from each trial)"
     }
   },
   "additionalProperties": false
