@@ -13,6 +13,7 @@ class ANTLoader(FileLoader):
         logger.info(f"Loading ANT Neuro file: {file_path.name}")
 
         raw = read_raw_ant(file_path, **kwargs, verbose=False)
+        cls._retype_non_eeg_channels(raw)
         return raw
 
     @classmethod

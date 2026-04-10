@@ -24,13 +24,7 @@ class FIFLoader(FileLoader):
         # Detect and fix inverted electrode coordinates automatically
         cls._auto_correct_montage(raw)
 
-        # Explicitly set channel types to exclude EOG from forward model
-        eog_channels = ['HEOG', 'VEOG', 'EOG', 'heog', 'veog', 'eog']
-        stim_channels = ['STIM', 'TRIGGER']
-
-        # Set channel types
-        raw.set_channel_types({ch: 'eog' for ch in eog_channels if ch in raw.ch_names})
-        raw.set_channel_types({ch: 'stim' for ch in stim_channels if ch in raw.ch_names})
+        cls._retype_non_eeg_channels(raw)
 
         return raw
 

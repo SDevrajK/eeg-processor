@@ -36,8 +36,8 @@ def segment_raw_by_conditions(raw: BaseRaw, conditions: List[dict]) -> Dict[str,
     conditions_with_markers = [c for c in conditions if 'markers' in c and c['markers']]
     
     if not conditions_with_markers:
-        logger.info("No conditions have markers - skipping segmentation")
-        return {condition['name']: raw for condition in conditions}
+        logger.info("No conditions have markers - each condition gets an independent copy of raw data")
+        return {condition['name']: raw.copy() for condition in conditions}
     
     logger.info(f"Segmenting data for {len(conditions_with_markers)} conditions with markers")
     segmented_data = {}

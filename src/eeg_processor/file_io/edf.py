@@ -14,6 +14,7 @@ class EDFLoader(FileLoader):
 
         # EDF files often have encoding issues
         raw = read_raw_edf(file_path, encoding='latin1', **kwargs, verbose=False)
+        cls._retype_non_eeg_channels(raw)
         return raw
 
     @classmethod

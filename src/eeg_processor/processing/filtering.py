@@ -53,6 +53,13 @@ def filter_data(raw: BaseRaw,
             **filter_kwargs
         )
 
+    current_data._filter_metrics = {
+        'l_freq': l_freq,
+        'h_freq': h_freq,
+        'notch': notch if notch is not None else None,
+        'sfreq': current_data.info['sfreq'],
+    }
+
     return current_data
 
 

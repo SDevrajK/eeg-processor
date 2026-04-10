@@ -15,10 +15,7 @@ class BDFLoader(FileLoader):
         # BDF files may need status channel specification
         raw = read_raw_bdf(file_path, **kwargs, verbose=False)
 
-        # Common BDF post-processing
-        if 'Status' in raw.ch_names:
-            raw.set_channel_types({'Status': 'stim'})
-
+        cls._retype_non_eeg_channels(raw)
         return raw
 
     @classmethod

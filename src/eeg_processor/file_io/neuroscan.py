@@ -1,5 +1,6 @@
 from pathlib import Path
 from mne.io import read_raw_cnt, BaseRaw
+from mne.channels import make_standard_montage
 from .base import FileLoader
 import logging
 
@@ -13,6 +14,11 @@ class NeuroscanLoader(FileLoader):
         cls._validate_file(file_path)
         logger.info(f"Loading Neuroscan file: {file_path.name}")
         raw = read_raw_cnt(file_path, **kwargs)
+        # Always apply standard montage — embedded .cnt positions are often incorrectly scaled,
+        # causing MNE to estimate an unrealistic head radius (100cm) during interpolation.
+        raw.set_montage(make_standard_montage('standard_1005'), match_case=False, on_missing='ignore')
+        logger.info("Applied standard 10-05 montage")
+        cls._retype_non_eeg_channels(raw)
         return raw
 
     @classmethod

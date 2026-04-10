@@ -13,6 +13,7 @@ from loguru import logger
 # Internal imports
 from .utils.unicode_path_fix import apply_unicode_path_fix
 from .utils.config_loader import load_config
+from .utils.completion_marker import is_already_processed, write_marker
 from .utils.memory_tools import (get_process_memory_detailed, 
                                  MemoryTracker, cleanup_and_monitor_gc, log_memory_with_context)
 from .quality_control.quality_tracker import QualityTracker
@@ -24,6 +25,19 @@ from .processing.segmentation import segment_raw_by_conditions
 
 # Apply Unicode normalization for file paths
 apply_unicode_path_fix()
+
+
+def _print_startup_header() -> None:
+    from . import __version__, __author__
+    line = "=" * 52
+    logger.info(line)
+    logger.info(f"  EEG Processor  v{__version__}")
+    logger.info(f"  Author : {__author__}")
+    logger.info(f"  MNE    : v{mne.__version__}")
+    logger.info(line)
+
+
+_print_startup_header()
 
 
 class EEGPipeline:
@@ -87,6 +101,10 @@ class EEGPipeline:
         logger.info(f"Starting batch processing for {len(self.participant_handler.participants)} participants")
 
         for participant in self.participant_handler.participants:
+            if is_already_processed(self.config.results_dir, participant.id,
+                                    self.config.stages, self.config.conditions):
+                continue
+
             try:
                 logger.debug(f"Processing participant: {participant.id}")
                 self.quality_tracker.track_participant_start(participant.id)
@@ -95,6 +113,14 @@ class EEGPipeline:
 
                 self.quality_tracker.track_participant_completion(participant.id)
                 logger.success(f"Completed processing: {participant.id}")
+
+                # Save individual quality metrics before the completion marker
+                self.quality_tracker.save_participant_metrics(participant.id)
+
+                # Write completion marker — done last so a crash during saving
+                # leaves no marker and the participant is reprocessed on resume
+                write_marker(self.config.results_dir, participant.id,
+                             self.config.stages, self.config.conditions)
 
                 # Force garbage collection between participants
                 gc.collect()
@@ -304,6 +330,9 @@ class EEGPipeline:
                     })
                     logger.debug(f"Successfully processed trigger '{trigger_name}' for stage '{stage_name}'")
                 else:
+                    self._track_stage_quality(data_to_process, result, stage_name, participant.id, condition, {
+                        'memory_before_mb': stage_tracker.memory_before['rss_mb'],
+                    })
                     return result
                     
             except Exception as e:

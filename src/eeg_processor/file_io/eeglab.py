@@ -13,6 +13,7 @@ class EEGLABLoader(FileLoader):
         logger.info(f"Loading EEGLAB file: {file_path.name}")
 
         raw = read_raw_eeglab(file_path, **kwargs, verbose=False)
+        cls._retype_non_eeg_channels(raw)
         return raw
 
     @classmethod

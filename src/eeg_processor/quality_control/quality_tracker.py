@@ -236,12 +236,24 @@ class QualityTracker:
 
     def _extract_filter_metrics(self, output_data) -> Dict[str, Any]:
         """Extract filtering metrics"""
+        if hasattr(output_data, '_filter_metrics'):
+            m = output_data._filter_metrics
+            return {
+                'filter_applied': True,
+                'highpass': m['l_freq'],
+                'lowpass': m['h_freq'],
+                'notch': m['notch'],
+                'sfreq': m['sfreq'],
+                'method': 'filter_params_stored'
+            }
+        # Fallback: read from info (notch won't appear here)
         return {
             'filter_applied': True,
-            'highpass': getattr(output_data.info, 'highpass', None),
-            'lowpass': getattr(output_data.info, 'lowpass', None),
+            'highpass': output_data.info.get('highpass'),
+            'lowpass': output_data.info.get('lowpass'),
+            'notch': None,
             'sfreq': output_data.info['sfreq'],
-            'method': 'filter_info_extraction'
+            'method': 'filter_info_fallback'
         }
 
     def _extract_reference_metrics(self, output_data) -> Dict[str, Any]:
@@ -347,7 +359,9 @@ class QualityTracker:
         elif stage_name == "filter":
             hp = metrics.get('highpass', 'None')
             lp = metrics.get('lowpass', 'None')
-            return f"highpass={hp}, lowpass={lp}"
+            notch = metrics.get('notch', None)
+            notch_str = f", notch={notch}" if notch else ""
+            return f"highpass={hp}, lowpass={lp}{notch_str}"
 
         else:
             return f"completed ({metrics.get('method', 'unknown')})"
@@ -436,6 +450,19 @@ class QualityTracker:
             issues.append(f"Large memory increase: {memory_data['delta_mb']:.0f} MB")
         
         return issues
+
+    def save_participant_metrics(self, participant_id: str) -> Optional[Path]:
+        """Save quality metrics for a single participant immediately after processing."""
+        if participant_id not in self.metrics:
+            logger.warning(f"No metrics found for participant {participant_id}")
+            return None
+
+        participant_file = self.quality_dir / f"{participant_id}_quality.json"
+        with open(participant_file, 'w') as f:
+            json.dump(self.metrics[participant_id], f, indent=2, default=str)
+
+        logger.info(f"Participant quality metrics saved: {participant_file.name}")
+        return participant_file
 
     def save_metrics(self):
         """Export metrics to JSON file with enhanced memory analysis summary"""

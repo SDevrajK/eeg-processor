@@ -61,15 +61,23 @@ def detect_bad_channels(
     if original_bads:
         logger.debug(f"Pre-existing bad channels: {sorted(original_bads)}")
 
+    # Non-EEG channel name patterns to exclude from detection and interpolation
+    _NON_EEG_PATTERNS = ['EOG', 'HEOG', 'VEOG', 'STIM', 'TRIGGER', 'ECG', 'EMG', 'REF']
+
+    def _is_non_eeg(ch_name: str) -> bool:
+        return any(p in ch_name.upper() for p in _NON_EEG_PATTERNS)
+
     # Use MNE's LOF method for bad channel detection
     try:
         from mne.preprocessing import find_bad_channels_lof
+        # Build explicit EEG picks, excluding EOG/non-EEG channels that may be mislabeled
+        eeg_picks = [ch for ch in raw.ch_names if not _is_non_eeg(ch)]
         detected_bads = find_bad_channels_lof(
             raw,
             n_neighbors=n_neighbors,
             threshold=threshold,
             verbose=verbose,
-            picks='eeg'
+            picks=eeg_picks
         )
 
         if detected_bads:
@@ -124,13 +132,19 @@ def _interpolate_bad_channels(raw: BaseRaw, n_neighbors: int, threshold: float, 
     """
     Interpolate bad channels with LOF-based validation.
     """
-    bads_before = raw.info['bads'].copy()
+    _NON_EEG_PATTERNS = ['EOG', 'HEOG', 'VEOG', 'STIM', 'TRIGGER', 'ECG', 'EMG', 'REF']
+
+    # Only interpolate EEG channels — EOG/non-EEG channels lack montage positions
+    # and will produce NaN data if interpolation is attempted
+    bads_before = [ch for ch in raw.info['bads']
+                   if not any(p in ch.upper() for p in _NON_EEG_PATTERNS)]
+    raw.info['bads'] = bads_before  # remove any non-EEG from bads list
 
     if not bads_before:
         return
 
     n_bads = len(bads_before)
-    n_total = len([ch for ch in raw.ch_names if not any(pattern in ch.upper() for pattern in ['EOG', 'HEOG', 'VEOG', 'STIM', 'TRIGGER', 'ECG'])])
+    n_total = len([ch for ch in raw.ch_names if not any(p in ch.upper() for p in _NON_EEG_PATTERNS)])
     bad_percentage = (n_bads / n_total) * 100
 
     logger.info(f"Attempting interpolation of {n_bads} bad channels ({bad_percentage:.1f}% of {n_total} EEG channels)")

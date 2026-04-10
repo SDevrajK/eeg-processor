@@ -51,7 +51,7 @@ class AnalysisInterface:
             clean_event = event_type.lower().replace(" ", "").replace("_", "").replace("-", "").replace("/", "_")
             return f"sub-{clean_id}_task-{clean_condition}_desc-{clean_event}_{data_type}.{file_ext}"
         else:
-            return f"sub-{clean_id}_task-{clean_condition}_{data_type}.{file_ext}"
+            return f"sub-{clean_id}_task-{clean_condition}_desc-{data_type}.{file_ext}"
 
     def load_data(self, participant_id: str, condition_name: str,
                   data_type: str = "spectrum", event_type: Optional[str] = None) -> Optional[Union[mne.Epochs, Spectrum]]:
@@ -92,31 +92,19 @@ class AnalysisInterface:
         file_path = search_dir / filename
 
         if not file_path.exists():
-            # If event_type was specified and file not found, log a more specific message
-            if event_type:
-                logger.debug(f"No {data_type} file found for participant {participant_id}, condition {condition_name}, event {event_type}")
+            print(f"[analysis_interface] File not found: {file_path}")
             return None
 
-        logger.debug(f"Loading {data_type} from: {file_path}")
+        print(f"[analysis_interface] Loading {data_type} from: {file_path}")
 
-        try:
-            if data_type == "spectrum":
-                return mne.time_frequency.read_spectrum(file_path)
-            elif data_type == "epochs":
-                return mne.read_epochs(file_path)
-            elif data_type == "evoked":
-                return mne.read_evokeds(file_path)  # Evoked
-            elif data_type == "average_tfr":
-                return mne.time_frequency.read_tfrs(file_path)
-            elif data_type == "epochs_tfr":
-                return mne.time_frequency.read_tfrs(file_path)  # EpochsTFR
-            elif data_type == "continuous_tfr":
-                return mne.time_frequency.read_tfrs(file_path)  # RawTFR
-            elif data_type == "itc":
-                return mne.time_frequency.read_tfrs(file_path)  # ITC
-        except Exception as e:
-            logger.error(f"Failed to load {file_path}: {e}")
-            return None
+        if data_type == "spectrum":
+            return mne.time_frequency.read_spectrum(file_path)
+        elif data_type == "epochs":
+            return mne.read_epochs(file_path)
+        elif data_type == "evoked":
+            return mne.read_evokeds(file_path)
+        elif data_type in ("average_tfr", "epochs_tfr", "continuous_tfr", "itc"):
+            return mne.time_frequency.read_tfrs(file_path)
 
     def get_participant_ids(self) -> List[str]:
         """Get list of participant IDs from config"""

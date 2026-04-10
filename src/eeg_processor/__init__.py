@@ -5,8 +5,8 @@ This package provides tools for processing EEG data from multiple formats,
 with built-in quality control and reporting capabilities.
 """
 
-__version__ = "0.1.0"
-__author__ = "EEG Processor Contributors"
+__version__ = "0.2.2"
+__author__ = "Sayeed Devraj-Kizuk"
 
 # Configure logging to be less intrusive for library usage
 import logging

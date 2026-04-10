@@ -37,7 +37,7 @@ class BrainVisionLoader(FileLoader):
             raw = read_raw_brainvision(file_path, **kwargs, verbose=False)
 
         # Set proper channel types after loading
-        BrainVisionLoader._set_channel_types(raw)
+        BrainVisionLoader._retype_non_eeg_channels(raw)
 
         # Check and fix missing channel locations
         BrainVisionLoader._fix_missing_montage(raw)
@@ -359,23 +359,6 @@ DataFile={base_name}.eeg
 [Marker Infos]
 ; Marker conversion failed
 """
-
-    @staticmethod
-    def _set_channel_types(raw: BaseRaw):
-        """Set appropriate channel types for known channels"""
-        type_mapping = {}
-
-        for ch_name in raw.ch_names:
-            if ch_name.upper() in ['EOG', 'LEOG', 'REOG', 'HEOG', 'VEOG']:
-                type_mapping[ch_name] = 'eog'
-            elif ch_name.upper() in ['ECG', 'EKG']:
-                type_mapping[ch_name] = 'ecg'
-            elif ch_name.upper() in ['EMG']:
-                type_mapping[ch_name] = 'emg'
-
-        if type_mapping:
-            raw.set_channel_types(type_mapping)
-            logger.info(f"Set channel types: {type_mapping}")
 
     @staticmethod
     def _fix_missing_montage(raw: BaseRaw):

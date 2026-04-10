@@ -2,6 +2,7 @@
 from loguru import logger
 from typing import Dict, List, Optional, Union
 import mne
+import numpy as np
 from mne import Epochs
 from mne.io import BaseRaw
 
@@ -12,7 +13,7 @@ def create_epochs(raw: BaseRaw,
                   tmax: float,
                   baseline: tuple,
                   reject_bad: bool = True,
-                  reject: Optional[Dict[str, float]] = None,
+                  reject: Optional[Dict] = None,
                   flat: Optional[Dict[str, float]] = None,
                   inplace: bool = False,  # Parameter for consistency, but ignored
                   preload: bool = True,  # Control memory usage
@@ -43,6 +44,11 @@ def create_epochs(raw: BaseRaw,
     """
     if inplace:
         logger.warning("inplace=True ignored for epoching - always creates new Epochs object")
+
+    # Extract gradient rejection params from reject dict before passing to MNE
+    reject = dict(reject) if reject is not None else None
+    check_gradient = bool(reject.pop('check_gradient', True)) if reject else True
+    gradient_threshold = float(reject.pop('gradient_threshold', 50.0)) if reject else 50.0
 
     # Set default rejection thresholds only for channel types present in the data
     channel_types_in_data = set(ch['kind'] for ch in raw.info['chs'])
@@ -87,6 +93,22 @@ def create_epochs(raw: BaseRaw,
     except Exception as e:
         logger.error(f"Error extracting events: {e}")
         raise
+
+    # Drop events that share a sample index — two triggers at the same sample
+    # are ambiguous and likely erroneous (e.g. corrupted triggers at end of recording)
+    sample_indices = events[:, 0]
+    unique_samples, counts = np.unique(sample_indices, return_counts=True)
+    duplicate_samples = unique_samples[counts > 1]
+    if len(duplicate_samples) > 0:
+        duplicate_mask = np.isin(sample_indices, duplicate_samples)
+        dropped = events[duplicate_mask]
+        events = events[~duplicate_mask]
+        for sample in duplicate_samples:
+            codes = dropped[dropped[:, 0] == sample, 2].tolist()
+            logger.warning(
+                f"Dropped {len(codes)} triggers at sample {sample} "
+                f"(trigger codes {codes} occupy the same sample — likely corrupt)"
+            )
 
     # Build event_id dictionary from condition
     event_id = {}
@@ -141,10 +163,13 @@ def create_epochs(raw: BaseRaw,
         logger.info(f"Created {len(epochs)} epochs from {len(event_id)} event types")
         logger.info(f"Event types: {list(event_id.keys())}")
         logger.info(f"Baseline applied: {epochs.baseline}, Rejection: {reject_params}")
-        
+
+        if reject_bad and check_gradient:
+            _apply_gradient_rejection(epochs, gradient_threshold)
+
         # Add participant metadata to epochs if available in raw data
         _add_participant_metadata_to_epochs(epochs, raw)
-        
+
         return epochs
         
     except Exception as e:
@@ -153,6 +178,25 @@ def create_epochs(raw: BaseRaw,
 
 
 import pandas as pd
+
+
+def _apply_gradient_rejection(epochs: Epochs, gradient_threshold: float) -> None:
+    """Drop epochs where EEG voltage step between consecutive samples exceeds threshold (µV/ms)."""
+    eeg_picks = mne.pick_types(epochs.info, eeg=True, eog=False, stim=False)
+    if len(eeg_picks) == 0:
+        return
+
+    data = epochs.get_data(picks=eeg_picks)
+    dt_ms = 1000.0 / epochs.info['sfreq']
+    gradients = np.abs(np.diff(data, axis=2)) * 1e6 / dt_ms
+    max_gradients = gradients.max(axis=(1, 2))
+
+    bad_indices = np.where(max_gradients > gradient_threshold)[0].tolist()
+    if bad_indices:
+        epochs.drop(bad_indices, reason='GRADIENT')
+        logger.info(f"Gradient rejection ({gradient_threshold} µV/ms): dropped {len(bad_indices)} epochs")
+    else:
+        logger.info(f"Gradient rejection ({gradient_threshold} µV/ms): no epochs exceeded threshold")
 
 
 def extract_event_metadata(epochs, condition):

@@ -20,7 +20,7 @@ def reject_bad_epochs(
     epochs: BaseEpochs,
     reject: Optional[Dict[str, float]] = None,
     flat: Optional[Dict[str, float]] = None,
-    check_gradient: bool = False,
+    check_gradient: bool = True,
     gradient_threshold: Optional[float] = None,
     verbose: Optional[Union[bool, str]] = None
 ) -> BaseEpochs:
@@ -53,17 +53,17 @@ def reject_bad_epochs(
 
         If None, uses flat parameters set during epoch creation.
     check_gradient : bool, default=False
-        If True, apply gradient-based rejection (not yet implemented).
+        If True, apply gradient-based rejection (EEG channels only).
 
         BrainVision Analyzer equivalent:
         - "Maximal allowed voltage step": 50 µV/ms
 
-        This catches sharp transients like electrode pops and disconnections.
-        Currently a placeholder for future implementation.
+        This catches sharp transients like electrode pops and disconnections
+        that may not exceed peak-to-peak amplitude thresholds.
     gradient_threshold : float | None, default=None
-        Maximum allowed voltage gradient in µV/ms (e.g., 50.0).
+        Maximum allowed voltage step between consecutive samples in µV/ms.
         Only used if check_gradient=True.
-        If None and check_gradient=True, uses default of 50 µV/ms.
+        If None, uses default of 50 µV/ms.
     verbose : bool | str | None, default=None
         Control verbosity of the logging output.
 
@@ -77,8 +77,8 @@ def reject_bad_epochs(
     - Rejection is based on peak-to-peak (PTP) amplitude: max - min in each epoch
     - Bad epochs are marked but not removed until epochs.drop_bad() is called
     - This function calls drop_bad() internally, so bad epochs are removed
+    - Gradient rejection runs before amplitude rejection when check_gradient=True
     - After rejection, re-applying baseline correction may be needed
-    - Gradient checking (check_gradient=True) is not yet implemented
 
     Examples
     --------
@@ -123,14 +123,13 @@ def reject_bad_epochs(
             "set preload=True when creating epochs."
         )
 
-    # Handle gradient checking (placeholder)
+    # Apply gradient-based rejection before amplitude rejection
     if check_gradient:
-        logger.warning(
-            "Gradient-based rejection (check_gradient=True) is not yet implemented. "
-            "Only amplitude-based rejection (reject/flat) will be applied."
+        _check_gradient_rejection(
+            epochs,
+            gradient_threshold=gradient_threshold if gradient_threshold is not None else 50.0,
+            verbose=verbose
         )
-        # TODO: Implement gradient checking
-        # See _check_gradient_rejection() placeholder below
 
     # Validate and convert reject and flat parameters
     if reject is not None:
@@ -204,57 +203,51 @@ def _check_gradient_rejection(
     verbose: Optional[Union[bool, str]] = None
 ) -> BaseEpochs:
     """
-    Apply gradient-based rejection to epochs (PLACEHOLDER - NOT IMPLEMENTED).
+    Apply gradient-based rejection to epochs (EEG channels only).
 
-    This function will check for sharp voltage changes that exceed the maximum
-    allowed gradient (e.g., 50 µV/ms in BrainVision Analyzer).
+    Catches electrode pops and sharp transients that are physiologically
+    impossible but may not exceed peak-to-peak amplitude thresholds.
+    Equivalent to BrainVision Analyzer's "Maximal allowed voltage step" (50 µV/ms).
 
     Parameters
     ----------
     epochs : mne.BaseEpochs
         Epochs to check for gradient violations.
     gradient_threshold : float, default=50.0
-        Maximum allowed voltage gradient in µV/ms.
+        Maximum allowed voltage step between consecutive samples in µV/ms.
     verbose : bool | str | None
         Control verbosity.
 
     Returns
     -------
     epochs : mne.BaseEpochs
-        Epochs with gradient-based rejection applied.
-
-    Notes
-    -----
-    Implementation approach:
-    1. Compute first derivative (np.diff) of each epoch/channel
-    2. Convert to µV/ms units based on sampling frequency
-    3. Find maximum absolute gradient in each epoch
-    4. Mark epochs where max gradient > threshold
-    5. Use epochs.drop() to remove marked epochs
-
-    Example implementation:
-    ```python
-    sfreq = epochs.info['sfreq']
-    data = epochs.get_data()  # Shape: (n_epochs, n_channels, n_times)
-
-    # Compute gradient in µV/ms
-    dt_ms = 1000 / sfreq  # Time between samples in ms
-    gradients = np.diff(data, axis=2) * 1e6 / dt_ms  # Convert to µV/ms
-
-    # Find max absolute gradient per epoch
-    max_gradients = np.abs(gradients).max(axis=(1, 2))  # Max over channels and time
-
-    # Identify bad epochs
-    bad_indices = np.where(max_gradients > gradient_threshold)[0]
-
-    # Drop bad epochs
-    epochs.drop(bad_indices, reason='GRADIENT')
-    ```
-
-    This catches electrode pops, disconnections, and very sharp transients
-    that are physiologically impossible but might not exceed amplitude thresholds.
+        Epochs with gradient-violating epochs dropped.
     """
-    raise NotImplementedError(
-        "Gradient-based rejection is not yet implemented. "
-        "This is a placeholder for future development."
-    )
+    import mne
+    eeg_picks = mne.pick_types(epochs.info, eeg=True, eog=False, stim=False)
+    if len(eeg_picks) == 0:
+        logger.warning("No EEG channels found for gradient rejection")
+        return epochs
+
+    # Shape: (n_epochs, n_eeg_channels, n_times)
+    data = epochs.get_data(picks=eeg_picks)
+
+    # Sample-to-sample differences scaled to µV/ms
+    dt_ms = 1000.0 / epochs.info['sfreq']
+    gradients = np.abs(np.diff(data, axis=2)) * 1e6 / dt_ms
+
+    # Maximum gradient across all EEG channels and timepoints per epoch
+    max_gradients = gradients.max(axis=(1, 2))
+
+    bad_indices = np.where(max_gradients > gradient_threshold)[0].tolist()
+
+    if bad_indices:
+        epochs.drop(bad_indices, reason='GRADIENT')
+        logger.info(
+            f"Gradient rejection ({gradient_threshold} µV/ms): "
+            f"dropped {len(bad_indices)} epochs"
+        )
+    else:
+        logger.info(f"Gradient rejection ({gradient_threshold} µV/ms): no epochs exceeded threshold")
+
+    return epochs

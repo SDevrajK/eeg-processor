@@ -5,9 +5,10 @@ from loguru import logger
 from typing import Optional
 from mne.channels import make_dig_montage
 import numpy as np
+from .base import FileLoader
 
 
-class CurryLoader:
+class CurryLoader(FileLoader):
     @classmethod
     def load(cls, file_path: Path, **kwargs) -> "BaseRaw":
         raw = read_raw_curry(file_path, preload=True, **kwargs)
@@ -15,13 +16,7 @@ class CurryLoader:
         # Detect and fix inverted channels automatically
         cls._auto_correct_montage(raw)
 
-        # Explicitly set channel types to exclude EOG from forward model
-        eog_channels = ['HEOG', 'VEOG']
-        stim_channels = ['STIM', 'TRIGGER']
-
-        # Set channel types
-        raw.set_channel_types({ch: 'eog' for ch in eog_channels if ch in raw.ch_names})
-        raw.set_channel_types({ch: 'stim' for ch in stim_channels if ch in raw.ch_names})
+        cls._retype_non_eeg_channels(raw)
 
         return raw
 

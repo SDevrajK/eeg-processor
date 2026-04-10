@@ -9,20 +9,19 @@ except FileNotFoundError:
 
 setup(
     name="eeg-processor",
-    version="0.2.1",
-    author="Your Name",  # TODO: Update with actual author
-    author_email="your.email@example.com",  # TODO: Update with actual email
+    version="0.2.2",
+    author="Sayeed Devraj-Kizuk",  
+    author_email="sayeed.kizuk64@gmail.com", 
     description="A comprehensive EEG processing pipeline with quality control and reporting",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/eeg-processor",  # TODO: Update with actual URL
-    packages=find_packages(where="src"),
+    url="https://github.com/SDevrajK/eeg-processor", 
     package_dir={"": "src"},
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
-        "License :: OSI Approved :: MIT License",  # TODO: Update if different license
+        "License :: OSI Approved :: MIT License",  
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
