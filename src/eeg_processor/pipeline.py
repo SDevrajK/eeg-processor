@@ -309,6 +309,17 @@ class EEGPipeline:
                     del stage_params_with_info['baseline']  # Remove sentinel value before passing to stage
                     logger.debug(f"Using external baseline: {baseline_path}")
 
+                # Inject EpochsTFR save path when save_intermediates is enabled
+                if (stage_name == "time_frequency"
+                        and self.config.output_config.get('save_intermediates', False)):
+                    epochs_tfr_filename = self.result_saver._get_filename(
+                        participant.id, condition['name'], 'epochs_tfr', 'h5', trigger_name
+                    )
+                    stage_params_with_info['epochs_tfr_save_path'] = (
+                        self.config.results_dir / 'interim' / epochs_tfr_filename
+                    )
+                    logger.debug(f"EpochsTFR will be saved to: {stage_params_with_info['epochs_tfr_save_path']}")
+
                 # Only add participant_info for stages that need it
                 stages_needing_participant_info = ['crop_participant_segment']
                 if stage_name in stages_needing_participant_info:

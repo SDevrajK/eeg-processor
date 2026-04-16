@@ -1,5 +1,6 @@
 import gc
 import numpy as np
+from pathlib import Path
 from mne import Epochs
 from mne.io import BaseRaw
 from mne.time_frequency import tfr_morlet, tfr_multitaper, AverageTFR, AverageTFRArray, Spectrum
@@ -173,6 +174,7 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         external_baseline: Optional[str] = None,
                         memory_limit_gb: Optional[float] = None,
                         output: str = "total",
+                        epochs_tfr_save_path: Optional[Path] = None,
                         **kwargs) -> AverageTFR:
     """
     Compute averaged time-frequency representation from epochs.
@@ -200,6 +202,10 @@ def compute_epochs_tfr_average(epochs: Epochs,
                            using the rest mean power. The baseline file must have matching
                            channels and frequencies.
         memory_limit_gb: Memory limit in GB for chunking (None = auto-detect)
+        epochs_tfr_save_path: If provided, save the individual-trial complex EpochsTFR to this
+                              path (as .h5) before baseline correction and averaging. Only
+                              possible when the full dataset fits in memory (non-chunked path).
+                              Ignored with a warning if chunked TFR mode is active.
         output: Type of power to compute: 'total' (default), 'evoked', or 'induced'.
                 'total': average of |TFR|² across trials
                 'evoked': |TFR of averaged ERP|² (phase-locked oscillations)
@@ -407,6 +413,9 @@ def compute_epochs_tfr_average(epochs: Epochs,
     # Determine if we should use single-trial baseline correction
     use_single_trial = single_trial_baseline and (baseline is not None or rest_baseline_power is not None)
 
+    # Initialize epochs_tfr; set in non-chunked single-trial path below
+    epochs_tfr = None
+
     # For large datasets with single-trial baseline, compute TFR in chunks to avoid memory errors
     if use_single_trial and optimal_chunk_size is not None and optimal_chunk_size < len(epochs):
         logger.warning(f"Large dataset requires chunked TFR computation")
@@ -536,7 +545,22 @@ def compute_epochs_tfr_average(epochs: Epochs,
             import traceback
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             raise
-    
+
+    # Save individual-trial EpochsTFR before baseline correction and averaging, if requested.
+    # Only possible in the non-chunked path where the full EpochsTFR is in memory.
+    if epochs_tfr_save_path is not None:
+        if epochs_tfr is not None:
+            save_path = Path(epochs_tfr_save_path)
+            logger.info(f"Saving individual-trial EpochsTFR to: {save_path}")
+            epochs_tfr.save(save_path, overwrite=True)
+            logger.success(f"EpochsTFR saved: {epochs_tfr.data.shape} "
+                           f"({epochs_tfr.data.nbytes / 1e9:.2f} GB)")
+        else:
+            logger.warning(
+                "Cannot save EpochsTFR: chunked TFR mode is active because the dataset "
+                "exceeds memory_limit_gb. Increase memory_limit_gb to enable individual-trial saving."
+            )
+
     # Handle single-trial baseline correction with memory-efficient chunked processing
     if use_single_trial:
         try:
