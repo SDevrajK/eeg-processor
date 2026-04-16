@@ -786,7 +786,6 @@ def compute_epochs_tfr_average(epochs: Epochs,
                         data=corrected_power,
                         times=tfr_times,
                         freqs=freqs,
-                        nave=n_epochs,
                         comment=f"Baseline-corrected per-trial power ({effective_baseline_mode})"
                     )
                     save_tfr.save(Path(epochs_tfr_save_path), overwrite=True)
