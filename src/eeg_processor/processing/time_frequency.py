@@ -421,9 +421,37 @@ def compute_epochs_tfr_average(epochs: Epochs,
         logger.warning(f"Large dataset requires chunked TFR computation")
         logger.warning(f"Will process {len(epochs)} epochs in chunks of {optimal_chunk_size}")
 
-        # We'll compute TFR chunk-by-chunk and accumulate results
-        # This avoids the memory error during TFR computation
-        epochs_tfr = None  # Will build this incrementally
+        # When saving is requested, compute the full EpochsTFR, save it, and reuse it for
+        # baseline correction — no need to re-compute in chunks if it fits in memory.
+        if epochs_tfr_save_path is not None:
+            logger.info(
+                "save_intermediates is set — computing full EpochsTFR. "
+                "If it fits in memory, chunked baseline correction will be skipped."
+            )
+            try:
+                epochs_tfr = epochs.compute_tfr(
+                    method=method, freqs=freqs, n_cycles=n_cycles, use_fft=True,
+                    return_itc=False, average=False, output='complex',
+                    n_jobs=4, picks='eeg', verbose='INFO', **kwargs
+                )
+                Path(epochs_tfr_save_path).parent.mkdir(parents=True, exist_ok=True)
+                epochs_tfr.save(Path(epochs_tfr_save_path), overwrite=True)
+                logger.success(f"EpochsTFR saved: {epochs_tfr.data.shape} "
+                               f"({epochs_tfr.data.nbytes / 1e9:.2f} GB)")
+                epochs_tfr_save_path = None  # Mark as handled; skip save block below
+                # epochs_tfr is kept — non-chunked baseline correction will be used below
+            except MemoryError:
+                logger.error(
+                    "MemoryError while computing full EpochsTFR for saving — dataset is too large. "
+                    "EpochsTFR will not be saved. Falling back to chunked processing."
+                )
+                epochs_tfr = None  # Fall back to chunked baseline correction
+            except Exception as e:
+                logger.warning(f"Could not save EpochsTFR: {e}. Falling back to chunked processing.")
+                epochs_tfr = None
+
+        # If saving was not requested (or failed), epochs_tfr remains None,
+        # which signals the chunked path in the baseline correction block below.
 
     else:
         # Standard path: compute TFR for all epochs at once
@@ -557,8 +585,8 @@ def compute_epochs_tfr_average(epochs: Epochs,
                            f"({epochs_tfr.data.nbytes / 1e9:.2f} GB)")
         else:
             logger.warning(
-                "Cannot save EpochsTFR: chunked TFR mode is active because the dataset "
-                "exceeds memory_limit_gb. Increase memory_limit_gb to enable individual-trial saving."
+                "Cannot save EpochsTFR: single_trial_baseline is disabled or no baseline was specified, "
+                "so no per-trial EpochsTFR was computed. Enable single_trial_baseline and set baseline."
             )
 
     # Handle single-trial baseline correction with memory-efficient chunked processing
