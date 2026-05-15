@@ -35,12 +35,14 @@ class PipelineConfig:
         return self.results_dir / "quality"
 
 
-def load_config(config_path: Union[str, Dict[str, Any]], override_params: Optional[Dict[str, Any]] = None) -> PipelineConfig:
+def load_config(config_path: Union[str, Dict[str, Any]], override_params: Optional[Dict[str, Any]] = None, require_raw_data: bool = True) -> PipelineConfig:
     """Load and validate configuration from file or dictionary.
     
     Args:
         config_path: Path to YAML config file or config dictionary
         override_params: Optional parameters to override in config
+        require_raw_data: If True, validates that raw data directory exists (default: True).
+                          Set to False for analysis-only mode where only processed results are needed.
         
     Returns:
         Validated PipelineConfig object
@@ -72,7 +74,7 @@ def load_config(config_path: Union[str, Dict[str, Any]], override_params: Option
         if override_params:
             raw_config = _deep_merge_config(raw_config, override_params)
             
-        return validate_config(raw_config, config_base)
+        return validate_config(raw_config, config_base, require_raw_data=require_raw_data)
         
     except (ConfigurationError, ValidationError):
         raise
@@ -80,12 +82,14 @@ def load_config(config_path: Union[str, Dict[str, Any]], override_params: Option
         raise ConfigurationError(f"Unexpected error loading config: {e}")
 
 
-def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
+def validate_config(raw_config: Dict, config_base: Path, require_raw_data: bool = True) -> PipelineConfig:
     """Validate and convert raw config dict to PipelineConfig.
     
     Args:
         raw_config: Raw configuration dictionary
         config_base: Base directory for resolving relative paths
+        require_raw_data: If True, validates that raw data directory exists (default: True).
+                          Set to False for analysis-only mode.
         
     Returns:
         Validated PipelineConfig object
@@ -189,8 +193,11 @@ def validate_config(raw_config: Dict, config_base: Path) -> PipelineConfig:
         raise ValidationError("Raw data directory path is required")
     
     raw_data_dir = Path(raw_data_dir)
-    if not raw_data_dir.exists():
+    if require_raw_data and not raw_data_dir.exists():
         raise ValidationError(f"Raw data directory does not exist: {raw_data_dir}")
+    elif not raw_data_dir.exists():
+        logger.warning(f"Raw data directory does not exist: {raw_data_dir}. "
+                       f"Config loaded in analysis-only mode - pipeline processing will fail.")
 
     # Validate participants structure - support both simple and detailed formats
     participants_data = raw_config.get('participants', {})

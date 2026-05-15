@@ -26,10 +26,11 @@ EEG Processor is a comprehensive EEG data processing pipeline for scientific res
 
 ## Critical Environment Requirements
 
-### Platform: WSL2 with Miniconda
-- **Environment**: Miniconda environment called `eeg-processor`
+### Platform: Linux with Miniforge
+- **Environment**: Conda environment called `eeg-processor`
 - **Python execution**: Use `python` directly when environment is activated
-- **Environment activation**: `source ~/miniconda3/etc/profile.d/conda.sh && conda activate eeg-processor`
+- **Environment activation**: `source ~/miniforge3/etc/profile.d/conda.sh && conda activate eeg-processor`
+- **Package install**: `pip install -e .` for dev mode, or `pip install <package>` inside activated env
 
 ### Essential Commands
 
@@ -326,3 +327,60 @@ The system includes comprehensive quality control:
 - **QualityReporter** - Report generation and aggregation
 - **HTMLGenerator** - Interactive HTML report creation
 - **QualityFlagging** - Automated quality assessment
+
+---
+
+## Current Session Context
+<!-- Auto-managed by /save-context -->
+
+**Last Updated**: 2026-02-12 20:45
+**Session Focus**: TFR Configuration Validation System
+**Active PRD**: `docs/prd/prd-config-validation-system.md`
+**Active Tasks**: `docs/tasks/tasks-prd-config-validation-system.md` (28 tasks)
+
+### Next Task
+Continue with config validation system PRD implementation tasks
+
+### Recent Completions
+- ✅ Added `require_raw_data` parameter to `load_config()`/`validate_config()` in `config_loader.py` (2026-05-14)
+  - Default `True` preserves existing pipeline behavior (raw dir must exist)
+  - `False` skips existence check, enabling analysis-only config loading
+  - Warning logged when raw dir missing with `require_raw_data=False`
+- ✅ Rebuilt conda environment on new Linux machine (miniforge3, Python 3.11)
+- ✅ Updated CLAUDE.md with correct platform config for Linux + Miniforge
+- ✅ Completed comprehensive task list generation (2026-02-12)
+  - 28 sub-tasks across 5 parent tasks
+  - 6 RESEARCH tasks (using research-scientist-analyzer, code-reviewer)
+  - 17 IMPLEMENTATION tasks
+  - 5 REVIEW tasks (using quality-assessment-specialist)
+  - Dependencies mapped, files identified
+- ✅ Completed comprehensive PRD for configuration validation system (2026-02-12)
+  - Incremental validator framework with extensibility
+  - Phase 1: Critical validators (TFR, epoch timing, file existence)
+  - Rich error messages with solutions
+  - Strict validation (no overrides)
+- ✅ Created comprehensive documentation structure (2026-02-12)
+  - docs/ARCHITECTURE.md - Complete system architecture
+  - docs/PROJECT_STATUS.md - Current status and roadmap
+  - docs/SETUP.md - Development setup guide
+- ✅ Fixed git commit authorship (all commits now attributed to Sayeed Devraj-Kizuk) (2026-02-12)
+
+### Key Session Notes
+- Identified issue: TFR fails when wavelet length exceeds signal length (1 Hz @ 3 cycles needs ~4.8s, but epochs are 4s)
+- Formula: min_duration ≈ 5 × n_cycles / (π × freq_min)
+- PRD complete: Incremental validation approach with 3 critical validators first
+- Task list complete: Ready to implement Phase 1 (Core Framework + Critical Validators)
+- Implementation plan: ~1 week for Phase 1 completion
+- Validation triggers automatically on config load, blocks pipeline if fails
+- Error messages designed with rich formatting and actionable solutions
+
+### Quick Reference
+- Main pipeline: `src/eeg_processor/pipeline.py`
+- Config system: `src/eeg_processor/utils/config_loader.py`
+- Config validator: `src/eeg_processor/utils/config_validator.py` (will enhance)
+- New validator module: `src/eeg_processor/utils/validators.py` (to create)
+- TFR module: `src/eeg_processor/processing/time_frequency.py`
+- Active PRD: `docs/prd/prd-config-validation-system.md`
+- Active Tasks: `docs/tasks/tasks-prd-config-validation-system.md`
+- Tests: `tests/` (will add test_validators.py)
+- Documentation: `docs/` (ARCHITECTURE, PROJECT_STATUS, SETUP)

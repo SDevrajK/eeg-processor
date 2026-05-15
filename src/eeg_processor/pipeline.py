@@ -56,7 +56,8 @@ class EEGPipeline:
     # INITIALIZATION AND SETUP
     # ==========================================
     
-    def __init__(self, config_path: Optional[Union[str, Dict[str, Any]]] = None) -> None:
+    def __init__(self, config_path: Optional[Union[str, Dict[str, Any]]] = None,
+                 require_raw_data: bool = True) -> None:
         """Initialize EEG processing pipeline."""
         self.config: Optional[Any] = None
         self.processor: DataProcessor = DataProcessor()
@@ -68,18 +69,22 @@ class EEGPipeline:
         self.quality_tracker: Optional[QualityTracker] = None
 
         if config_path:
-            self.load_config(config_path)
+            self.load_config(config_path, require_raw_data=require_raw_data)
 
-    def load_config(self, config_path: Union[str, Dict[str, Any]]) -> 'EEGPipeline':
+    def load_config(self, config_path: Union[str, Dict[str, Any]], require_raw_data: bool = True) -> 'EEGPipeline':
         """Load configuration and setup pipeline components."""
-        self.config = load_config(config_path)
+        self.config = load_config(config_path, require_raw_data=require_raw_data)
         
-        self.participant_handler = ParticipantHandler(self.config)
-        self.result_saver = ResultSaver(self.config.results_dir)
-        self.quality_tracker = QualityTracker(self.config.results_dir)
-        
-        # Set results directory in processor for save_raw stage
-        self.processor._results_dir = self.config.results_dir
+        if require_raw_data:
+            self.participant_handler = ParticipantHandler(self.config)
+            self.result_saver = ResultSaver(self.config.results_dir)
+            self.quality_tracker = QualityTracker(self.config.results_dir)
+            self.processor._results_dir = self.config.results_dir
+        else:
+            self.participant_handler = None
+            self.result_saver = None
+            self.quality_tracker = None
+            logger.info("Pipeline initialized in analysis-only mode - raw data not required")
 
         self._log_configuration_details()
         return self
